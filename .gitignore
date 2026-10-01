@@ -1,0 +1,22 @@
+# ---- Java / Maven ----
+target/
+*.class
+*.jar
+
+# ---- 运行时数据 ----
+# 本地图片存储目录不入版本库，仅保留说明文件
+upload/*
+!upload/README.md
+logs/
+*.log
+
+# ---- 环境与密钥 ----
+.env
+.env.*
+application-local.yml
+
+# ---- IDE ----
+.idea/
+*.iml
+.vscode/
+.DS_Store
