@@ -77,7 +77,41 @@ public enum ErrorCode {
     /** PRD ORD-06：每单每人只能评价一次（uk_order_reviewer 兜底） */
     ORDER_DUPLICATE_REVIEW(40908, "该订单已评价过，请勿重复评价"),
     /** PRD ORD-06：仅订单完成（COMPLETED）后 7 天内可评价 */
-    REVIEW_WINDOW_CLOSED(40009, "已过评价期（完成后 7 天内有效）");
+    REVIEW_WINDOW_CLOSED(40009, "已过评价期（完成后 7 天内有效）"),
+
+    // ==================== REQ/SWP 求购与交换段（M5 特色板块，追加式维护） ====================
+    /** PRD REQ-01/03：求购帖字段级参数不合法（预算为负、分类非法等） */
+    WANT_PARAM_INVALID(40011, "求购信息不合法"),
+    /** PRD SWP-01：交换帖字段级参数不合法（差价金额为负或缺失等） */
+    SWAP_PARAM_INVALID(40012, "交换信息不合法"),
+    /** PRD REQ-02/04：无权操作他人求购帖 */
+    WANT_POST_FORBIDDEN(40307, "无权操作该求购帖"),
+    /** PRD SWP-02/03：无权操作他人交换帖或他人请求 */
+    SWAP_POST_FORBIDDEN(40308, "无权操作该交换帖"),
+    /** PRD §6.3：求购帖不存在或已删除 */
+    WANT_POST_NOT_FOUND(40404, "求购帖不存在或已删除"),
+    /** PRD REQ-03：应约不存在或已删除 */
+    OFFER_NOT_FOUND(40405, "应约不存在"),
+    /** PRD §6.3：交换帖不存在或已删除 */
+    SWAP_POST_NOT_FOUND(40406, "交换帖不存在或已删除"),
+    /** PRD SWP-02：交换请求不存在 */
+    SWAP_REQUEST_NOT_FOUND(40407, "交换请求不存在"),
+    /** PRD §6.3：帖子关闭/成交/删除后禁止新增应约与交换请求 */
+    WANT_POST_CLOSED(40909, "求购帖已关闭或已成交，无法应约"),
+    /** PRD REQ-03：不能应约自己发布的求购帖 */
+    WANT_OFFER_SELF(40910, "不能应约自己发布的求购帖"),
+    /** PRD REQ-03：该应约已被接受/拒绝/撤回 */
+    WANT_OFFER_HANDLED(40911, "该应约已处理，请刷新后查看"),
+    /** PRD REQ-03：同一求购帖最多一条待处理应约（uk_offer_pending 兜底） */
+    WANT_OFFER_DUPLICATE(40915, "您已提交过应约，请等待对方处理"),
+    /** PRD §6.3：帖子关闭/成交/删除后禁止新增交换请求 */
+    SWAP_POST_CLOSED(40912, "交换帖已关闭或已成交，无法发起交换"),
+    /** PRD SWP-02：不能对自己发布的交换帖发起交换 */
+    SWAP_REQUEST_SELF(40913, "不能对自己发布的交换帖发起交换"),
+    /** PRD SWP-03：该交换请求已被同意/拒绝 */
+    SWAP_REQUEST_HANDLED(40914, "该交换请求已处理，请刷新后查看"),
+    /** PRD SWP-02：同一交换帖最多一条待处理请求（uk_swap_req_pending 兜底） */
+    SWAP_REQUEST_DUPLICATE(40916, "您已提交过交换请求，请等待对方处理");
 
     private final int code;
     private final String message;

@@ -12,11 +12,13 @@ import com.campus.market.entity.Goods;
 import com.campus.market.entity.GoodsImage;
 import com.campus.market.entity.GoodsTag;
 import com.campus.market.entity.Tag;
+import com.campus.market.entity.UserBehavior;
 import com.campus.market.mapper.FavoriteMapper;
 import com.campus.market.mapper.GoodsImageMapper;
 import com.campus.market.mapper.GoodsMapper;
 import com.campus.market.mapper.GoodsTagMapper;
 import com.campus.market.mapper.TagMapper;
+import com.campus.market.mapper.UserBehaviorMapper;
 import com.campus.market.service.FavoriteService;
 import com.campus.market.vo.FavoriteVO;
 import com.campus.market.vo.GoodsCardVO;
@@ -26,6 +28,8 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -47,6 +51,7 @@ public class FavoriteServiceImpl implements FavoriteService {
     private final GoodsImageMapper goodsImageMapper;
     private final GoodsTagMapper goodsTagMapper;
     private final TagMapper tagMapper;
+    private final UserBehaviorMapper userBehaviorMapper;
 
     @Override
     @Transactional
@@ -71,11 +76,23 @@ public class FavoriteServiceImpl implements FavoriteService {
                 goodsMapper.update(null, new LambdaUpdateWrapper<Goods>()
                         .eq(Goods::getId, goodsId)
                         .setSql("favorite_count = favorite_count + 1"));
+                // 推荐输入埋点（PRD §6.6：收藏权重 3），仅在实际新增收藏时写入
+                recordFavoriteBehavior(userId, goodsId);
             }
         } catch (DuplicateKeyException e) {
             // 并发重复收藏：唯一约束兜底，视为已收藏
             log.debug("重复收藏并发冲突，幂等处理：userId={}, goodsId={}", userId, goodsId);
         }
+    }
+
+    /** 收藏行为埋点（REC-01 输入）：user_behavior(FAVORITE, 当日) */
+    private void recordFavoriteBehavior(Long userId, Long goodsId) {
+        UserBehavior behavior = new UserBehavior();
+        behavior.setUserId(userId);
+        behavior.setGoodsId(goodsId);
+        behavior.setBehavior(UserBehavior.BEHAVIOR_FAVORITE);
+        behavior.setBehaviorDate(LocalDate.now(ZoneId.of("Asia/Shanghai")));
+        userBehaviorMapper.insert(behavior);
     }
 
     @Override

@@ -25,6 +25,7 @@ import com.campus.market.mapper.TagMapper;
 import com.campus.market.mapper.UserBehaviorMapper;
 import com.campus.market.security.LoginUser;
 import com.campus.market.service.GoodsService;
+import com.campus.market.service.RecommendService;
 import com.campus.market.service.SensitiveWordService;
 import com.campus.market.vo.GoodsCardVO;
 import com.campus.market.vo.GoodsDetailVO;
@@ -72,6 +73,7 @@ public class GoodsServiceImpl implements GoodsService {
     private final UserBehaviorMapper userBehaviorMapper;
     private final FavoriteMapper favoriteMapper;
     private final SensitiveWordService sensitiveWordService;
+    private final RecommendService recommendService;
 
     // ==================== GDS-01 发布 ====================
 
@@ -286,8 +288,28 @@ public class GoodsServiceImpl implements GoodsService {
                     .eq(com.campus.market.entity.Favorite::getGoodsId, id));
             vo.setFavorited(favorited != null && favorited > 0);
         }
-        // similarGoods 相似推荐位为 M5（REC）预留，M2 恒为空列表
+        // 相似推荐位（PRD REC-03 / GDS-05）：同分类 + 共享标签，Redis 缓存优先（M5 接线）
+        vo.setSimilarGoods(cardsByIds(recommendService.similarGoodsIds(id, 6)));
         return vo;
+    }
+
+    // ==================== 推荐位批量卡片装配（REC-01~03） ====================
+
+    @Override
+    public List<GoodsCardVO> cardsByIds(List<Long> goodsIds) {
+        if (goodsIds == null || goodsIds.isEmpty()) {
+            return List.of();
+        }
+        List<Long> distinctIds = goodsIds.stream().filter(Objects::nonNull).distinct().toList();
+        if (distinctIds.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, Goods> goodsMap = goodsMapper.selectBatchIds(distinctIds).stream()
+                .filter(goods -> !Goods.STATUS_DELETED.equals(goods.getStatus()))
+                .collect(Collectors.toMap(Goods::getId, Function.identity(), (a, b) -> a));
+        // 保持推荐算法给出的排序：按入参顺序装配
+        List<Goods> ordered = distinctIds.stream().map(goodsMap::get).filter(Objects::nonNull).toList();
+        return buildCards(ordered);
     }
 
     /**

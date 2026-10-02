@@ -14,16 +14,26 @@ import com.campus.market.entity.Goods;
 import com.campus.market.entity.GoodsImage;
 import com.campus.market.entity.GoodsWant;
 import com.campus.market.entity.Notification;
+import com.campus.market.entity.Offer;
 import com.campus.market.entity.OrderInfo;
 import com.campus.market.entity.Review;
+import com.campus.market.entity.SwapPost;
+import com.campus.market.entity.SwapRequest;
 import com.campus.market.entity.User;
+import com.campus.market.entity.UserBehavior;
+import com.campus.market.entity.WantPost;
 import com.campus.market.mapper.GoodsImageMapper;
 import com.campus.market.mapper.GoodsMapper;
 import com.campus.market.mapper.GoodsWantMapper;
+import com.campus.market.mapper.OfferMapper;
 import com.campus.market.mapper.OrderInfoMapper;
 import com.campus.market.mapper.OrderNoSeqMapper;
 import com.campus.market.mapper.ReviewMapper;
+import com.campus.market.mapper.SwapPostMapper;
+import com.campus.market.mapper.SwapRequestMapper;
+import com.campus.market.mapper.UserBehaviorMapper;
 import com.campus.market.mapper.UserMapper;
+import com.campus.market.mapper.WantPostMapper;
 import com.campus.market.security.LoginUser;
 import com.campus.market.service.CreditService;
 import com.campus.market.service.NotificationService;
@@ -71,6 +81,11 @@ public class OrderServiceImpl implements OrderService {
     private final GoodsImageMapper goodsImageMapper;
     private final UserMapper userMapper;
     private final ReviewMapper reviewMapper;
+    private final UserBehaviorMapper userBehaviorMapper;
+    private final OfferMapper offerMapper;
+    private final WantPostMapper wantPostMapper;
+    private final SwapRequestMapper swapRequestMapper;
+    private final SwapPostMapper swapPostMapper;
     private final CreditService creditService;
     private final NotificationService notificationService;
     private final CreditProperties creditProperties;
@@ -292,6 +307,8 @@ public class OrderServiceImpl implements OrderService {
                     .eq(Goods::getId, order.getGoodsId())
                     .eq(Goods::getStatus, Goods.STATUS_IN_TRANSACTION)
                     .set(Goods::getStatus, Goods.STATUS_SOLD));
+            // 成交行为埋点（PRD §6.6：成交权重 5，推荐输入），仅商品类订单记录
+            recordOrderDoneBehavior(order.getBuyerId(), order.getGoodsId());
         }
         creditService.addCredit(order.getBuyerId(), CreditLog.REASON_ORDER_COMPLETE,
                 CreditLog.REF_TYPE_ORDER, order.getId());
@@ -300,6 +317,16 @@ public class OrderServiceImpl implements OrderService {
         notifyBoth(order, "订单已完成",
                 "订单 %s 已完成，信用分 +2，欢迎在 7 天内互评",
                 "订单 %s 已完成，信用分 +2，欢迎在 7 天内互评");
+    }
+
+    /** 成交行为埋点（REC-01 输入）：user_behavior(ORDER_DONE, 当日)；仅在本方法内调用，随完成事务提交一次 */
+    private void recordOrderDoneBehavior(Long userId, Long goodsId) {
+        UserBehavior behavior = new UserBehavior();
+        behavior.setUserId(userId);
+        behavior.setGoodsId(goodsId);
+        behavior.setBehavior(UserBehavior.BEHAVIOR_ORDER_DONE);
+        behavior.setBehaviorDate(LocalDate.now(java.time.ZoneId.of("Asia/Shanghai")));
+        userBehaviorMapper.insert(behavior);
     }
 
     // ==================== ORD-03 超时自动取消 ====================
@@ -375,9 +402,10 @@ public class OrderServiceImpl implements OrderService {
         Map<Long, User> userMap = loadUsers(records.stream()
                 .flatMap(o -> java.util.stream.Stream.of(o.getBuyerId(), o.getSellerId())).distinct().toList());
         Set<Long> reviewedOrderIds = loadReviewedOrderIds(records, viewerId);
+        Map<Long, String> sourceTitles = loadSourceTitles(records);
 
         List<OrderListVO> voList = records.stream()
-                .map(order -> buildListVO(order, viewerId, goodsMap, coverMap, userMap, reviewedOrderIds))
+                .map(order -> buildListVO(order, viewerId, goodsMap, coverMap, userMap, reviewedOrderIds, sourceTitles))
                 .toList();
         PageResult<OrderListVO> voPage = new PageResult<>();
         voPage.setList(voList);
@@ -396,7 +424,7 @@ public class OrderServiceImpl implements OrderService {
 
         OrderDetailVO vo = new OrderDetailVO();
         copyBase(vo, buildListVO(order, viewerId, goodsMap, coverMap, userMap,
-                loadReviewedOrderIds(List.of(order), viewerId)));
+                loadReviewedOrderIds(List.of(order), viewerId), loadSourceTitles(List.of(order))));
         vo.setConfirmedAt(order.getConfirmedAt());
         vo.setBuyerConfirmedAt(order.getBuyerConfirmedAt());
         vo.setSellerConfirmedAt(order.getSellerConfirmedAt());
@@ -504,7 +532,8 @@ public class OrderServiceImpl implements OrderService {
     // ---------- VO 装配 ----------
 
     private OrderListVO buildListVO(OrderInfo order, Long viewerId, Map<Long, Goods> goodsMap,
-                                    Map<Long, String> coverMap, Map<Long, User> userMap, Set<Long> reviewedOrderIds) {
+                                    Map<Long, String> coverMap, Map<Long, User> userMap,
+                                    Set<Long> reviewedOrderIds, Map<Long, String> sourceTitles) {
         boolean isBuyer = Objects.equals(order.getBuyerId(), viewerId);
         Long counterpartId = isBuyer ? order.getSellerId() : order.getBuyerId();
         User counterpart = userMap.get(counterpartId);
@@ -519,6 +548,9 @@ public class OrderServiceImpl implements OrderService {
         if (goods != null) {
             vo.setGoodsTitle(goods.getTitle());
             vo.setGoodsCoverUrl(coverMap.get(goods.getId()));
+        } else {
+            // PURCHASE/SWAP 订单无关联商品：标题回溯来源帖子（PRD §4.3 订单来源可追溯）
+            vo.setGoodsTitle(sourceTitles.get(order.getId()));
         }
         vo.setAmount(order.getAmount());
         vo.setBuyerId(order.getBuyerId());
@@ -625,6 +657,50 @@ public class OrderServiceImpl implements OrderService {
         vo.setCreditScore(user.getCreditScore());
         vo.setAuthStatus(user.getAuthStatus());
         return vo;
+    }
+
+    /**
+     * 订单来源标题回溯（PRD §4.3：每个订单必须能追溯到唯一业务来源）。
+     * PURCHASE：offer.order_id = 订单 ID → want_post.title；SWAP：swap_request.order_id = 订单 ID → swap_post.title。
+     * order_info 无标题快照列，good 因软删不物理删除故 SALE 订单可由 goods_id 追溯，此处补齐非商品类订单。
+     */
+    private Map<Long, String> loadSourceTitles(List<OrderInfo> orders) {
+        List<Long> orderIds = orders.stream()
+                .filter(order -> order.getGoodsId() == null)
+                .map(OrderInfo::getId)
+                .distinct()
+                .toList();
+        if (orderIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, String> titles = new java.util.HashMap<>();
+        List<Offer> offers = offerMapper.selectList(new LambdaQueryWrapper<Offer>()
+                .in(Offer::getOrderId, orderIds));
+        if (!offers.isEmpty()) {
+            Map<Long, WantPost> posts = wantPostMapper.selectBatchIds(offers.stream()
+                            .map(Offer::getWantPostId).distinct().toList()).stream()
+                    .collect(Collectors.toMap(WantPost::getId, Function.identity(), (a, b) -> a));
+            offers.forEach(offer -> {
+                WantPost post = posts.get(offer.getWantPostId());
+                if (post != null) {
+                    titles.put(offer.getOrderId(), post.getTitle());
+                }
+            });
+        }
+        List<SwapRequest> requests = swapRequestMapper.selectList(new LambdaQueryWrapper<SwapRequest>()
+                .in(SwapRequest::getOrderId, orderIds));
+        if (!requests.isEmpty()) {
+            Map<Long, SwapPost> posts = swapPostMapper.selectBatchIds(requests.stream()
+                            .map(SwapRequest::getSwapPostId).distinct().toList()).stream()
+                    .collect(Collectors.toMap(SwapPost::getId, Function.identity(), (a, b) -> a));
+            requests.forEach(request -> {
+                SwapPost post = posts.get(request.getSwapPostId());
+                if (post != null) {
+                    titles.putIfAbsent(request.getOrderId(), post.getTitle());
+                }
+            });
+        }
+        return titles;
     }
 
     private Map<Long, Goods> loadGoods(List<OrderInfo> orders) {

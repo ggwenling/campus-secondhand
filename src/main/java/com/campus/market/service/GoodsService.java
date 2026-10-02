@@ -7,6 +7,8 @@ import com.campus.market.security.LoginUser;
 import com.campus.market.vo.GoodsCardVO;
 import com.campus.market.vo.GoodsDetailVO;
 
+import java.util.List;
+
 /**
  * 商品服务（PRD GDS-01 发布 / GDS-02 卖家管理 / GDS-03 列表 / GDS-04 搜索 / GDS-05 详情与浏览埋点）
  */
@@ -38,4 +40,11 @@ public interface GoodsService {
 
     /** 商品详情（含图集/标签/卖家摘要/当前用户收藏态），并写浏览埋点（登录用户口径） */
     GoodsDetailVO detail(Long id, LoginUser viewer);
+
+    /**
+     * 按 ID 列表批量装配商品卡片（推荐位/相似推荐用），保持入参顺序、自动跳过不存在或已删除的商品。
+     *
+     * @param goodsIds 商品 ID 列表（去重后查询；空列表返回空）
+     */
+    List<GoodsCardVO> cardsByIds(List<Long> goodsIds);
 }
