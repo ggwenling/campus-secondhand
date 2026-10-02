@@ -133,7 +133,15 @@ public enum ErrorCode {
     /** PRD ADM-04：被举报对象不存在或已删除 */
     REPORT_TARGET_MISSING(40410, "被举报对象不存在或已删除"),
     /** PRD ADM-04：该举报已处置，请勿重复操作 */
-    REPORT_ALREADY_HANDLED(40918, "该举报已处置，请勿重复操作");
+    REPORT_ALREADY_HANDLED(40918, "该举报已处置，请勿重复操作"),
+
+    // ==================== ADM 目录与词库段（M6 C7） ====================
+    /** PRD ADM-06：分类/标签仍被子资源或商品引用，无法删除 */
+    REF_IN_USE(40919, "该资源仍被引用，无法删除"),
+    /** PRD ADM-03：敏感词已存在（uk_word） */
+    WORD_DUPLICATE(40920, "该敏感词已存在"),
+    /** PRD ADM-03：敏感词不存在 */
+    WORD_NOT_FOUND(40411, "敏感词不存在");
 
     private final int code;
     private final String message;
