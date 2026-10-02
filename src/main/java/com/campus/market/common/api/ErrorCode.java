@@ -111,7 +111,29 @@ public enum ErrorCode {
     /** PRD SWP-03：该交换请求已被同意/拒绝 */
     SWAP_REQUEST_HANDLED(40914, "该交换请求已处理，请刷新后查看"),
     /** PRD SWP-02：同一交换帖最多一条待处理请求（uk_swap_req_pending 兜底） */
-    SWAP_REQUEST_DUPLICATE(40916, "您已提交过交换请求，请等待对方处理");
+    SWAP_REQUEST_DUPLICATE(40916, "您已提交过交换请求，请等待对方处理"),
+
+    // ==================== ADM 管理后台段（M6，追加式维护） ====================
+    /** PRD ADM-01：管理端字段级参数不合法 */
+    ADM_PARAM_INVALID(40013, "管理端参数不合法"),
+    /** PRD ADM-01：修改密码时原密码不正确 */
+    ADM_OLD_PASSWORD_WRONG(40014, "原密码不正确"),
+    /** PRD ADM-01：该管理员账号已停用 */
+    ADMIN_DISABLED(40309, "该管理员账号已停用"),
+    /** PRD ADM-01/T12：首次登录须先修改密码 */
+    ADM_MUST_CHANGE_PASSWORD(40310, "首次登录请先修改密码"),
+    /** PRD ADM-01：管理员不存在 */
+    ADMIN_NOT_FOUND(40408, "管理员不存在"),
+    /** PRD ADM-01：管理员用户名已存在（uk_username 兜底） */
+    ADMIN_USERNAME_DUP(40917, "管理员用户名已存在"),
+
+    // ==================== RPT 举报处置段（M6 处置端，M7 前台入口复用） ====================
+    /** PRD ADM-04：举报工单不存在 */
+    REPORT_NOT_FOUND(40409, "举报工单不存在"),
+    /** PRD ADM-04：被举报对象不存在或已删除 */
+    REPORT_TARGET_MISSING(40410, "被举报对象不存在或已删除"),
+    /** PRD ADM-04：该举报已处置，请勿重复操作 */
+    REPORT_ALREADY_HANDLED(40918, "该举报已处置，请勿重复操作");
 
     private final int code;
     private final String message;

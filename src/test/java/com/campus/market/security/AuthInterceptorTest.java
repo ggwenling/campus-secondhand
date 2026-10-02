@@ -37,6 +37,7 @@ class AuthInterceptorTest {
 
     @Mock JwtUtil jwtUtil;
     @Mock UserService userService;
+    @Mock com.campus.market.service.AdminService adminService;
 
     private AuthInterceptor interceptor;
     private MockHttpServletRequest request;
@@ -44,7 +45,7 @@ class AuthInterceptorTest {
 
     @BeforeEach
     void setUp() {
-        interceptor = new AuthInterceptor(jwtUtil, userService);
+        interceptor = new AuthInterceptor(jwtUtil, userService, adminService);
         request = new MockHttpServletRequest();
     }
 
@@ -136,6 +137,42 @@ class AuthInterceptorTest {
     void requireRole_multiRoles_anyMatchPasses() throws Exception {
         stubToken(LoginUserTestFactory.admin("auditor"), JwtUtil.TYPE_ACCESS);
         assertThat(interceptor.preHandle(request, response, handler("requireContent"))).isTrue();
+    }
+
+    // ==================== T12 强制改密门禁（M6） ====================
+
+    @Test
+    void admin_mustChangePassword_blockedOnOtherPaths() throws Exception {
+        LoginUser admin = LoginUserTestFactory.admin("super");
+        admin.setMustChangePassword(1);
+        stubToken(admin, JwtUtil.TYPE_ACCESS);
+        request.setRequestURI("/api/admin/accounts");
+
+        assertThatThrownBy(() -> interceptor.preHandle(request, response, handler("requireSuper")))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.ADM_MUST_CHANGE_PASSWORD));
+    }
+
+    @Test
+    void admin_mustChangePassword_authPathAllowed() throws Exception {
+        LoginUser admin = LoginUserTestFactory.admin("operator");
+        admin.setMustChangePassword(1);
+        stubToken(admin, JwtUtil.TYPE_ACCESS);
+        request.setRequestURI("/api/admin/auth/change-password");
+
+        // 改密接口不限定角色（operator 也可自行改密）
+        assertThat(interceptor.preHandle(request, response, handler("requireAuth"))).isTrue();
+    }
+
+    @Test
+    void admin_disabledAccount_rejectedByFreshState() throws Exception {
+        stubToken(LoginUserTestFactory.admin("super"), JwtUtil.TYPE_ACCESS);
+        org.mockito.Mockito.doThrow(new BusinessException(ErrorCode.ADMIN_DISABLED))
+                .when(adminService).applyFreshState(any());
+
+        assertThatThrownBy(() -> interceptor.preHandle(request, response, handler("requireSuper")))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.ADMIN_DISABLED));
     }
 
     @Test

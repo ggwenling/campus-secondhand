@@ -75,6 +75,12 @@
             <artifactId>spring-boot-starter-websocket</artifactId>
         </dependency>
 
+        <!-- AOP：后台操作日志切面（PRD ADM-09，M6） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+        </dependency>
+
         <!-- JWT 无状态登录（PRD USR-02） -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>

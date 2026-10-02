@@ -23,4 +23,6 @@ public class LoginUser {
     private Integer authStatus;
     /** 最新信用分：同上，供受限策略判断（PRD §5.7） */
     private Integer creditScore;
+    /** 最新强制改密标记（ADMIN 主体，M6）：由 AuthInterceptor 每请求刷新，token 不携带 */
+    private Integer mustChangePassword;
 }

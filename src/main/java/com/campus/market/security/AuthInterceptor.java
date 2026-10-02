@@ -4,6 +4,7 @@ import com.campus.market.common.api.ErrorCode;
 import com.campus.market.common.exception.BusinessException;
 import com.campus.market.security.annotation.RequireAuth;
 import com.campus.market.security.annotation.RequireRole;
+import com.campus.market.service.AdminService;
 import com.campus.market.service.UserService;
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -22,7 +23,9 @@ import java.util.Arrays;
  * 鉴权拦截器（PRD §9.2 接口层校验）：
  * 1. 请求头携带合法 token 时解析出 LoginUser 放入 UserContext，供"登录可选"接口（如商品详情）读取；
  * 2. 命中 @RequireAuth 强制要求登录，且 refresh token 不能访问业务接口；
- * 3. 命中 @RequireRole 校验后台管理员角色（RBAC）。
+ * 3. 命中 @RequireRole 校验后台管理员角色（RBAC，M6 权限矩阵）；
+ * 4. USER 主体每请求刷新封禁/认证/信用状态；ADMIN 主体刷新停用与强制改密标记（T12：mustChangePassword=1
+ *    仅放行 /api/admin/auth/**，其余接口 40310）。
  * 未标注注解的接口不做强制校验，因此无需维护放行路径清单。
  */
 @Slf4j
@@ -31,10 +34,14 @@ import java.util.Arrays;
 public class AuthInterceptor implements HandlerInterceptor {
 
     private static final String BEARER_PREFIX = "Bearer ";
+    /** T12：强制改密期间 ADMIN 仅可访问的后台认证路径前缀 */
+    private static final String ADMIN_AUTH_PATH_PREFIX = "/api/admin/auth/";
 
     private final JwtUtil jwtUtil;
 
     private final UserService userService;
+
+    private final AdminService adminService;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
@@ -46,6 +53,14 @@ public class AuthInterceptor implements HandlerInterceptor {
         // 前台用户主体：刷新封禁/认证/信用状态（封禁拦截 + 到期自动解封，PRD §4.1/§5.7）
         if (user != null && user.getUserType() == LoginUser.UserType.USER) {
             userService.applyFreshState(user);
+        }
+        // 后台管理员主体：刷新停用状态与强制改密标记（PRD ADM-01/T12）
+        if (user != null && user.getUserType() == LoginUser.UserType.ADMIN) {
+            adminService.applyFreshState(user);
+            if (user.getMustChangePassword() != null && user.getMustChangePassword() == 1
+                    && !request.getRequestURI().startsWith(ADMIN_AUTH_PATH_PREFIX)) {
+                throw new BusinessException(ErrorCode.ADM_MUST_CHANGE_PASSWORD);
+            }
         }
 
         RequireAuth requireAuth = findAnnotation(handlerMethod, RequireAuth.class);
