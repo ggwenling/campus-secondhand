@@ -31,6 +31,15 @@ public class UserDetailVO {
     /** 0=未认证 1=已认证 */
     private Integer authStatus;
 
+    /** 账号状态：0=正常 1=封禁（PRD §4.1，/users/me 刷新后仍可展示封禁提示条） */
+    private Integer status;
+
+    /** 封禁理由（status=1 时非空） */
+    private String banReason;
+
+    /** 封禁截止时间（非空且到期后由 AuthInterceptor 自动解封） */
+    private LocalDateTime bannedUntil;
+
     /** 在售商品数 */
     private Long onSaleCount;
 

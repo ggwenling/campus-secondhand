@@ -187,6 +187,57 @@ class AuthInterceptorTest {
                         e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.UNAUTHORIZED));
     }
 
+    // ==================== M7 封禁拦截与"自助路径"白名单（PRD §3.1） ====================
+
+    @Test
+    void bannedUser_businessPath_rejected() throws Exception {
+        LoginUser user = LoginUserTestFactory.user(1L, 1, 100);
+        stubToken(user, JwtUtil.TYPE_ACCESS);
+        // applyFreshState 刷新出封禁态（已不与异常耦合，由拦截器按 URI 决定是否拦截）
+        org.mockito.Mockito.doAnswer(inv -> {
+            user.setStatus(com.campus.market.entity.User.STATUS_BANNED);
+            return null;
+        }).when(userService).applyFreshState(any());
+        request.setRequestURI("/api/want-posts");
+
+        assertThatThrownBy(() -> interceptor.preHandle(request, response, handler("requireAuth")))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.ACCOUNT_BANNED));
+    }
+
+    @Test
+    void bannedUser_selfServicePaths_allowed() throws Exception {
+        LoginUser user = LoginUserTestFactory.user(1L, 1, 100);
+        stubToken(user, JwtUtil.TYPE_ACCESS);
+        org.mockito.Mockito.doAnswer(inv -> {
+            user.setStatus(com.campus.market.entity.User.STATUS_BANNED);
+            return null;
+        }).when(userService).applyFreshState(any());
+
+        // PRD §3.1：封禁用户仍可登录查看封禁原因与期限（个人资料），并可登出/刷新令牌、拉取导航红点
+        for (String uri : new String[]{"/api/users/me", "/api/auth/logout",
+                "/api/notifications/unread-count", "/api/chats/unread"}) {
+            request.setRequestURI(uri);
+            assertThatCode(() -> assertThat(interceptor
+                    .preHandle(request, response, handler("requireAuth"))).isTrue())
+                    .as("封禁用户应可访问 %s", uri)
+                    .doesNotThrowAnyException();
+        }
+    }
+
+    @Test
+    void normalUser_selfServicePath_notBlockedByBan() throws Exception {
+        LoginUser user = LoginUserTestFactory.user(1L, 1, 100);
+        stubToken(user, JwtUtil.TYPE_ACCESS);
+        org.mockito.Mockito.doAnswer(inv -> {
+            user.setStatus(com.campus.market.entity.User.STATUS_NORMAL);
+            return null;
+        }).when(userService).applyFreshState(any());
+        request.setRequestURI("/api/users/me");
+
+        assertThat(interceptor.preHandle(request, response, handler("requireAuth"))).isTrue();
+    }
+
     // ==================== 辅助 ====================
 
     private void stubToken(LoginUser user, String tokenType) {

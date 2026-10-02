@@ -45,6 +45,10 @@ public class UserServiceImpl implements UserService {
         vo.setCreditScore(user.getCreditScore());
         vo.setCreditLevel(creditLevel(user.getCreditScore()));
         vo.setAuthStatus(user.getAuthStatus());
+        // 封禁信息（PRD §4.1）：登录响应 LoginVO 已含，此处补齐使前端刷新 /users/me 后封禁提示条不丢失
+        vo.setStatus(user.getStatus());
+        vo.setBanReason(user.getBanReason());
+        vo.setBannedUntil(user.getBannedUntil());
         vo.setOnSaleCount(userMapper.countOnSaleGoods(userId));
         vo.setCreatedAt(user.getCreatedAt());
         UserAuth auth = userAuthMapper.selectByUserId(userId);
@@ -82,19 +86,19 @@ public class UserServiceImpl implements UserService {
         if (user == null) {
             return;
         }
-        // 封禁拦截 + 到期自动解封（PRD §4.1 / §5.7 封禁期限）
-        if (user.getStatus() != null && user.getStatus() == User.STATUS_BANNED) {
-            if (user.getBannedUntil() != null && user.getBannedUntil().isBefore(LocalDateTime.now())) {
-                User patch = new User();
-                patch.setId(user.getId());
-                patch.setStatus(User.STATUS_NORMAL);
-                userMapper.updateById(patch);
-            } else {
-                throw new BusinessException(ErrorCode.ACCOUNT_BANNED);
-            }
+        // 到期自动解封（PRD §5.7 封禁期限）；封禁的强制拦截上移到 AuthInterceptor：
+        // 拦截器需要按 URI 白名单放行"自助查看"接口（PRD §3.1 封禁用户可登录查看封禁原因和期限）
+        if (user.getStatus() != null && user.getStatus() == User.STATUS_BANNED
+                && user.getBannedUntil() != null && user.getBannedUntil().isBefore(LocalDateTime.now())) {
+            User patch = new User();
+            patch.setId(user.getId());
+            patch.setStatus(User.STATUS_NORMAL);
+            userMapper.updateById(patch);
+            user.setStatus(User.STATUS_NORMAL);
         }
         loginUser.setAuthStatus(user.getAuthStatus());
         loginUser.setCreditScore(user.getCreditScore());
+        loginUser.setStatus(user.getStatus());
     }
 
     /** 信用四档等级（PRD §5.7）：优秀≥120 / 良好 80~119 / 一般 60~79 / 受限&lt;60 */

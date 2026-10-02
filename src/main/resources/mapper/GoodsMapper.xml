@@ -54,11 +54,4 @@
         WHERE id = #{userId}
     </select>
 
-    <!-- 认证状态投影（GDS-01 发布前置校验，认证状态事实在 user_auth，user 表字段为同事务投影） -->
-    <select id="selectUserAuthStatus" resultType="java.lang.Integer">
-        SELECT auth_status
-        FROM user
-        WHERE id = #{userId}
-    </select>
-
 </mapper>

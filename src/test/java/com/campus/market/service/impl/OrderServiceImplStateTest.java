@@ -30,6 +30,7 @@ import com.campus.market.mapper.UserBehaviorMapper;
 import com.campus.market.mapper.UserMapper;
 import com.campus.market.mapper.WantPostMapper;
 import com.campus.market.security.LoginUser;
+import com.campus.market.security.UserAccessGuard;
 import com.campus.market.service.CreditService;
 import com.campus.market.service.NotificationService;
 import org.junit.jupiter.api.BeforeAll;
@@ -38,6 +39,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
@@ -84,7 +86,8 @@ class OrderServiceImplStateTest {
     @Mock SwapPostMapper swapPostMapper;
     @Mock CreditService creditService;
     @Mock NotificationService notificationService;
-    @Mock CreditProperties creditProperties;
+    /** 真实守卫（阈值取自 CreditProperties 默认 60），与生产口径一致 */
+    @Spy UserAccessGuard userAccessGuard = new UserAccessGuard(new CreditProperties());
 
     @InjectMocks
     OrderServiceImpl service;
@@ -97,7 +100,6 @@ class OrderServiceImplStateTest {
 
     @BeforeEach
     void setUp() {
-        lenient().when(creditProperties.getRestrictedThreshold()).thenReturn(60);
         // detail 组装链的轻量桩（空集合即可，不关注 VO 细节）
         lenient().when(goodsMapper.selectBatchIds(any())).thenReturn(List.of());
         lenient().when(goodsImageMapper.selectList(any())).thenReturn(List.of());

@@ -61,14 +61,19 @@ class UserServiceImplTest {
     // ==================== applyFreshState（拦截器每请求刷新） ====================
 
     @Test
-    void applyFreshState_bannedUntilFuture_rejected() {
+    void applyFreshState_bannedUntilFuture_refreshesStatusNotRejected() {
         User user = user(User.STATUS_BANNED);
         user.setBannedUntil(LocalDateTime.now().plusDays(3));
         when(userMapper.selectById(USER_ID)).thenReturn(user);
 
-        assertThatThrownBy(() -> service.applyFreshState(LoginUserTestFactory.user(USER_ID)))
-                .isInstanceOfSatisfying(BusinessException.class,
-                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.ACCOUNT_BANNED));
+        // M7：封禁的强制拦截上移到 AuthInterceptor（需按 URI 白名单放行个人资料等自助接口，PRD §3.1），
+        // 本方法只负责刷新状态，不再抛异常
+        LoginUser loginUser = LoginUserTestFactory.user(USER_ID);
+        service.applyFreshState(loginUser);
+
+        assertThat(loginUser.getStatus()).isEqualTo(User.STATUS_BANNED);
+        assertThat(loginUser.getAuthStatus()).isEqualTo(User.AUTH_STATUS_VERIFIED);
+        verify(userMapper, never()).updateById(any(User.class));   // 未到期不做解封写入
     }
 
     @Test
@@ -81,6 +86,7 @@ class UserServiceImplTest {
         service.applyFreshState(loginUser);
 
         verify(userMapper).updateById(any(User.class));   // 状态回 NORMAL
+        assertThat(loginUser.getStatus()).isEqualTo(User.STATUS_NORMAL);   // 到期解封后状态为正常
         assertThat(loginUser.getAuthStatus()).isEqualTo(User.AUTH_STATUS_VERIFIED);
     }
 

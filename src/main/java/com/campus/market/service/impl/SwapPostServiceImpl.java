@@ -8,7 +8,6 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.campus.market.common.api.ErrorCode;
 import com.campus.market.common.api.PageResult;
 import com.campus.market.common.exception.BusinessException;
-import com.campus.market.config.CreditProperties;
 import com.campus.market.dto.SwapPostListQuery;
 import com.campus.market.dto.SwapPostPublishDTO;
 import com.campus.market.dto.SwapRequestCreateDTO;
@@ -28,6 +27,7 @@ import com.campus.market.mapper.SwapPostMapper;
 import com.campus.market.mapper.SwapRequestMapper;
 import com.campus.market.mapper.UserMapper;
 import com.campus.market.security.LoginUser;
+import com.campus.market.security.UserAccessGuard;
 import com.campus.market.service.NotificationService;
 import com.campus.market.service.OrderService;
 import com.campus.market.service.SensitiveWordService;
@@ -76,14 +76,14 @@ public class SwapPostServiceImpl implements SwapPostService {
     private final OrderService orderService;
     private final NotificationService notificationService;
     private final SensitiveWordService sensitiveWordService;
-    private final CreditProperties creditProperties;
+    private final UserAccessGuard userAccessGuard;
 
     // ==================== SWP-01 发布 / 编辑 ====================
 
     @Override
     @Transactional
     public Long publish(SwapPostPublishDTO dto, LoginUser user) {
-        requireInteractive(user);
+        userAccessGuard.requireInteractive(user);
         Category category = requireValidCategory(dto.getCategoryId());
         BigDecimal diffAmount = resolveDiffAmount(dto);
         checkSensitive("标题", dto.getTitle());
@@ -106,7 +106,7 @@ public class SwapPostServiceImpl implements SwapPostService {
     @Override
     @Transactional
     public Long update(Long id, SwapPostPublishDTO dto, LoginUser user) {
-        requireInteractive(user);
+        userAccessGuard.requireInteractive(user);
         SwapPost post = requireExisting(id);
         requireOwner(post.getUserId(), user.getUserId());
         if (!SwapPost.STATUS_OPEN.equals(post.getStatus())) {
@@ -277,7 +277,7 @@ public class SwapPostServiceImpl implements SwapPostService {
                 .findFirst()
                 .ifPresent(request -> vo.setOrderId(request.getOrderId()));
         vo.setCanManage(isOwner && SwapPost.STATUS_OPEN.equals(post.getStatus()));
-        vo.setCanRequest(canInteract(viewer) && !isOwner && SwapPost.STATUS_OPEN.equals(post.getStatus()));
+        vo.setCanRequest(userAccessGuard.canInteract(viewer) && !isOwner && SwapPost.STATUS_OPEN.equals(post.getStatus()));
         return vo;
     }
 
@@ -286,7 +286,7 @@ public class SwapPostServiceImpl implements SwapPostService {
     @Override
     @Transactional
     public SwapRequestVO createRequest(Long postId, SwapRequestCreateDTO dto, LoginUser user) {
-        requireInteractive(user);
+        userAccessGuard.requireInteractive(user);
         SwapPost post = swapPostMapper.selectById(postId);
         if (post == null || SwapPost.STATUS_DELETED.equals(post.getStatus())) {
             throw new BusinessException(ErrorCode.SWAP_POST_NOT_FOUND);
@@ -344,7 +344,7 @@ public class SwapPostServiceImpl implements SwapPostService {
     @Override
     @Transactional
     public SwapRequestVO acceptRequest(Long requestId, LoginUser user) {
-        requireInteractive(user);
+        userAccessGuard.requireInteractive(user);
         // ① 锁帖（固定顺序：请求 → 帖）
         SwapRequest locked = swapRequestMapper.selectByIdForUpdate(requestId);
         if (locked == null) {
@@ -461,23 +461,6 @@ public class SwapPostServiceImpl implements SwapPostService {
     }
 
     // ==================== 私有辅助 ====================
-
-    private void requireInteractive(LoginUser user) {
-        if (user.getAuthStatus() == null || user.getAuthStatus() != User.AUTH_STATUS_VERIFIED) {
-            throw new BusinessException(ErrorCode.AUTH_NOT_CERTIFIED);
-        }
-        if (user.getCreditScore() == null
-                || user.getCreditScore() < creditProperties.getRestrictedThreshold()) {
-            throw new BusinessException(ErrorCode.ACCOUNT_RESTRICTED);
-        }
-    }
-
-    private boolean canInteract(LoginUser viewer) {
-        return viewer != null
-                && viewer.getAuthStatus() != null && viewer.getAuthStatus() == User.AUTH_STATUS_VERIFIED
-                && viewer.getCreditScore() != null
-                && viewer.getCreditScore() >= creditProperties.getRestrictedThreshold();
-    }
 
     private SwapPost requireExisting(Long id) {
         SwapPost post = swapPostMapper.selectById(id);

@@ -7,7 +7,6 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.campus.market.common.api.ErrorCode;
 import com.campus.market.common.api.PageResult;
 import com.campus.market.common.exception.BusinessException;
-import com.campus.market.config.CreditProperties;
 import com.campus.market.dto.OrderCreateDTO;
 import com.campus.market.entity.CreditLog;
 import com.campus.market.entity.Goods;
@@ -35,6 +34,7 @@ import com.campus.market.mapper.UserBehaviorMapper;
 import com.campus.market.mapper.UserMapper;
 import com.campus.market.mapper.WantPostMapper;
 import com.campus.market.security.LoginUser;
+import com.campus.market.security.UserAccessGuard;
 import com.campus.market.service.CreditService;
 import com.campus.market.service.NotificationService;
 import com.campus.market.service.OrderService;
@@ -88,16 +88,15 @@ public class OrderServiceImpl implements OrderService {
     private final SwapPostMapper swapPostMapper;
     private final CreditService creditService;
     private final NotificationService notificationService;
-    private final CreditProperties creditProperties;
+    private final UserAccessGuard userAccessGuard;
 
     // ==================== ORD-01 下单 ====================
 
     @Override
     @Transactional
     public OrderInfo createSaleOrder(LoginUser buyer, OrderCreateDTO dto) {
-        // 认证 + 受限校验（PRD §4.1 / §5.7 CRD-02）：LoginUser 快照由拦截器每请求刷新，不再查库
-        requireCertified(buyer);
-        requireNotRestricted(buyer);
+        // 认证 + 受限校验（PRD §3.1 / §4.1 / §5.7 CRD-02）：LoginUser 快照由拦截器每请求刷新，统一由 UserAccessGuard 承担
+        userAccessGuard.requireInteractive(buyer);
 
         Goods goods = goodsMapper.selectById(dto.getGoodsId());
         if (goods == null || Goods.STATUS_DELETED.equals(goods.getStatus())) {
@@ -405,7 +404,8 @@ public class OrderServiceImpl implements OrderService {
         Map<Long, String> sourceTitles = loadSourceTitles(records);
 
         List<OrderListVO> voList = records.stream()
-                .map(order -> buildListVO(order, viewerId, goodsMap, coverMap, userMap, reviewedOrderIds, sourceTitles))
+                .map(order -> buildListVO(new OrderListVO(), order, viewerId, goodsMap, coverMap, userMap,
+                        reviewedOrderIds, sourceTitles))
                 .toList();
         PageResult<OrderListVO> voPage = new PageResult<>();
         voPage.setList(voList);
@@ -422,9 +422,9 @@ public class OrderServiceImpl implements OrderService {
         Map<Long, String> coverMap = loadCovers(List.of(order));
         Map<Long, User> userMap = loadUsers(List.of(order.getBuyerId(), order.getSellerId()));
 
-        OrderDetailVO vo = new OrderDetailVO();
-        copyBase(vo, buildListVO(order, viewerId, goodsMap, coverMap, userMap,
-                loadReviewedOrderIds(List.of(order), viewerId), loadSourceTitles(List.of(order))));
+        // OrderDetailVO extends OrderListVO：行卡字段直接装配进详情 VO，再补详情独有字段（取代旧 copyBase 手工逐字段复制）
+        OrderDetailVO vo = buildListVO(new OrderDetailVO(), order, viewerId, goodsMap, coverMap, userMap,
+                loadReviewedOrderIds(List.of(order), viewerId), loadSourceTitles(List.of(order)));
         vo.setConfirmedAt(order.getConfirmedAt());
         vo.setBuyerConfirmedAt(order.getBuyerConfirmedAt());
         vo.setSellerConfirmedAt(order.getSellerConfirmedAt());
@@ -476,19 +476,6 @@ public class OrderServiceImpl implements OrderService {
                 .set(Goods::getStatus, Goods.STATUS_ON_SALE));
     }
 
-    private void requireCertified(LoginUser buyer) {
-        if (buyer.getAuthStatus() == null || buyer.getAuthStatus() != User.AUTH_STATUS_VERIFIED) {
-            throw new BusinessException(ErrorCode.AUTH_NOT_CERTIFIED);
-        }
-    }
-
-    private void requireNotRestricted(LoginUser buyer) {
-        if (buyer.getCreditScore() == null
-                || buyer.getCreditScore() < creditProperties.getRestrictedThreshold()) {
-            throw new BusinessException(ErrorCode.ACCOUNT_RESTRICTED);
-        }
-    }
-
     private OrderInfo requireOrderAndParty(Long orderId, Long viewerId) {
         OrderInfo order = orderInfoMapper.selectById(orderId);
         if (order == null) {
@@ -531,14 +518,14 @@ public class OrderServiceImpl implements OrderService {
 
     // ---------- VO 装配 ----------
 
-    private OrderListVO buildListVO(OrderInfo order, Long viewerId, Map<Long, Goods> goodsMap,
+    /** 行卡公共字段装配：目标 VO 由调用方传入（列表传 OrderListVO、详情传 OrderDetailVO，后者继承前者） */
+    private <T extends OrderListVO> T buildListVO(T vo, OrderInfo order, Long viewerId, Map<Long, Goods> goodsMap,
                                     Map<Long, String> coverMap, Map<Long, User> userMap,
                                     Set<Long> reviewedOrderIds, Map<Long, String> sourceTitles) {
         boolean isBuyer = Objects.equals(order.getBuyerId(), viewerId);
         Long counterpartId = isBuyer ? order.getSellerId() : order.getBuyerId();
         User counterpart = userMap.get(counterpartId);
 
-        OrderListVO vo = new OrderListVO();
         vo.setId(order.getId());
         vo.setOrderNo(order.getOrderNo());
         vo.setType(order.getType());
@@ -589,33 +576,6 @@ public class OrderServiceImpl implements OrderService {
     private boolean withinReviewWindow(OrderInfo order) {
         return order.getCompletedAt() != null
                 && order.getCompletedAt().plusDays(Review.REVIEW_WINDOW_DAYS).isAfter(LocalDateTime.now());
-    }
-
-    private void copyBase(OrderDetailVO target, OrderListVO source) {
-        target.setId(source.getId());
-        target.setOrderNo(source.getOrderNo());
-        target.setType(source.getType());
-        target.setStatus(source.getStatus());
-        target.setGoodsId(source.getGoodsId());
-        target.setGoodsTitle(source.getGoodsTitle());
-        target.setGoodsCoverUrl(source.getGoodsCoverUrl());
-        target.setAmount(source.getAmount());
-        target.setBuyerId(source.getBuyerId());
-        target.setSellerId(source.getSellerId());
-        target.setViewRole(source.getViewRole());
-        target.setCounterpartId(source.getCounterpartId());
-        target.setCounterpartNickname(source.getCounterpartNickname());
-        target.setCounterpartAvatar(source.getCounterpartAvatar());
-        target.setCounterpartCreditScore(source.getCounterpartCreditScore());
-        target.setHasReviewedByMe(source.getHasReviewedByMe());
-        target.setCanConfirm(source.getCanConfirm());
-        target.setCanReject(source.getCanReject());
-        target.setCanCancel(source.getCanCancel());
-        target.setCanComplete(source.getCanComplete());
-        target.setCanReview(source.getCanReview());
-        target.setCreatedAt(source.getCreatedAt());
-        target.setCompletedAt(source.getCompletedAt());
-        target.setCancelledAt(source.getCancelledAt());
     }
 
     private List<ReviewVO> loadOrderReviews(Long orderId) {

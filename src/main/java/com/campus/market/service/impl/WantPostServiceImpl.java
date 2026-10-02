@@ -8,7 +8,6 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.campus.market.common.api.ErrorCode;
 import com.campus.market.common.api.PageResult;
 import com.campus.market.common.exception.BusinessException;
-import com.campus.market.config.CreditProperties;
 import com.campus.market.dto.OfferCreateDTO;
 import com.campus.market.dto.WantPostListQuery;
 import com.campus.market.dto.WantPostPublishDTO;
@@ -23,6 +22,7 @@ import com.campus.market.mapper.OfferMapper;
 import com.campus.market.mapper.UserMapper;
 import com.campus.market.mapper.WantPostMapper;
 import com.campus.market.security.LoginUser;
+import com.campus.market.security.UserAccessGuard;
 import com.campus.market.service.NotificationService;
 import com.campus.market.service.OrderService;
 import com.campus.market.service.SensitiveWordService;
@@ -68,14 +68,14 @@ public class WantPostServiceImpl implements WantPostService {
     private final OrderService orderService;
     private final NotificationService notificationService;
     private final SensitiveWordService sensitiveWordService;
-    private final CreditProperties creditProperties;
+    private final UserAccessGuard userAccessGuard;
 
     // ==================== REQ-01 发布 / REQ-02 编辑 ====================
 
     @Override
     @Transactional
     public Long publish(WantPostPublishDTO dto, LoginUser user) {
-        requireInteractive(user);
+        userAccessGuard.requireInteractive(user);
         Category category = requireValidCategory(dto.getCategoryId());
         validateBudget(dto.getBudget());
         checkSensitive("标题", dto.getTitle());
@@ -95,7 +95,7 @@ public class WantPostServiceImpl implements WantPostService {
     @Override
     @Transactional
     public Long update(Long id, WantPostPublishDTO dto, LoginUser user) {
-        requireInteractive(user);
+        userAccessGuard.requireInteractive(user);
         WantPost post = requireExisting(id);
         requireOwner(post.getUserId(), user.getUserId());
         if (!WantPost.STATUS_OPEN.equals(post.getStatus())) {
@@ -266,7 +266,7 @@ public class WantPostServiceImpl implements WantPostService {
                 .findFirst()
                 .ifPresent(offer -> vo.setOrderId(offer.getOrderId()));
         vo.setCanManage(isOwner && WantPost.STATUS_OPEN.equals(post.getStatus()));
-        vo.setCanOffer(canInteract(viewer) && !isOwner && WantPost.STATUS_OPEN.equals(post.getStatus()));
+        vo.setCanOffer(userAccessGuard.canInteract(viewer) && !isOwner && WantPost.STATUS_OPEN.equals(post.getStatus()));
         return vo;
     }
 
@@ -275,7 +275,7 @@ public class WantPostServiceImpl implements WantPostService {
     @Override
     @Transactional
     public OfferVO createOffer(Long postId, OfferCreateDTO dto, LoginUser user) {
-        requireInteractive(user);
+        userAccessGuard.requireInteractive(user);
         WantPost post = wantPostMapper.selectById(postId);
         if (post == null || WantPost.STATUS_DELETED.equals(post.getStatus())) {
             throw new BusinessException(ErrorCode.WANT_POST_NOT_FOUND);
@@ -339,7 +339,7 @@ public class WantPostServiceImpl implements WantPostService {
     @Override
     @Transactional
     public OfferVO acceptOffer(Long offerId, LoginUser user) {
-        requireInteractive(user);
+        userAccessGuard.requireInteractive(user);
         // ① 锁帖（先锁帖再锁应约，固定加锁顺序避免死锁）
         Offer locked = offerMapper.selectByIdForUpdate(offerId);
         if (locked == null) {
@@ -455,24 +455,6 @@ public class WantPostServiceImpl implements WantPostService {
     }
 
     // ==================== 私有辅助 ====================
-
-    /** 互动前置校验（PRD §3.1）：需校园认证 + 未受限（登录主体快照由 AuthInterceptor 每请求刷新） */
-    private void requireInteractive(LoginUser user) {
-        if (user.getAuthStatus() == null || user.getAuthStatus() != User.AUTH_STATUS_VERIFIED) {
-            throw new BusinessException(ErrorCode.AUTH_NOT_CERTIFIED);
-        }
-        if (user.getCreditScore() == null
-                || user.getCreditScore() < creditProperties.getRestrictedThreshold()) {
-            throw new BusinessException(ErrorCode.ACCOUNT_RESTRICTED);
-        }
-    }
-
-    private boolean canInteract(LoginUser viewer) {
-        return viewer != null
-                && viewer.getAuthStatus() != null && viewer.getAuthStatus() == User.AUTH_STATUS_VERIFIED
-                && viewer.getCreditScore() != null
-                && viewer.getCreditScore() >= creditProperties.getRestrictedThreshold();
-    }
 
     private Long requireViewerId(LoginUser viewer) {
         if (viewer == null) {

@@ -24,6 +24,7 @@ import com.campus.market.mapper.GoodsTagMapper;
 import com.campus.market.mapper.TagMapper;
 import com.campus.market.mapper.UserBehaviorMapper;
 import com.campus.market.security.LoginUser;
+import com.campus.market.security.UserAccessGuard;
 import com.campus.market.service.GoodsService;
 import com.campus.market.service.RecommendService;
 import com.campus.market.service.SensitiveWordService;
@@ -74,13 +75,15 @@ public class GoodsServiceImpl implements GoodsService {
     private final FavoriteMapper favoriteMapper;
     private final SensitiveWordService sensitiveWordService;
     private final RecommendService recommendService;
+    private final UserAccessGuard userAccessGuard;
 
     // ==================== GDS-01 发布 ====================
 
     @Override
     @Transactional
     public Long publish(GoodsPublishDTO dto, LoginUser user) {
-        requireCertified(user.getUserId());
+        // PRD §3.1 / CRD-02：受限用户（creditScore < 受限阈值）禁止发布商品；认证+受限校验统一由 UserAccessGuard 承担
+        userAccessGuard.requireInteractive(user);
         validateCommon(dto);
         Category category = requireValidCategory(dto.getCategoryId());
         checkSensitive(dto.getTitle(), dto.getDescription());
@@ -104,7 +107,8 @@ public class GoodsServiceImpl implements GoodsService {
     @Override
     @Transactional
     public Long update(Long id, GoodsPublishDTO dto, LoginUser user) {
-        requireCertified(user.getUserId());
+        // PRD §3.1 / CRD-02：编辑与发布口径一致（同样要求已认证且未受限），避免受限用户先发布再绕过编辑
+        userAccessGuard.requireInteractive(user);
         Goods goods = requireExisting(id);
         requireOwner(goods, user.getUserId());
         // PRD §6.2：编辑必须校验操作者、状态和活动订单；交易中/已售出的事实不可被编辑
@@ -423,26 +427,6 @@ public class GoodsServiceImpl implements GoodsService {
         List<String> descHits = sensitiveWordService.findHits(description);
         if (!descHits.isEmpty()) {
             throw new BusinessException(ErrorCode.GOODS_SENSITIVE, "描述包含敏感词：" + String.join("、", descHits));
-        }
-    }
-
-    /**
-     * 校园认证校验（GDS-01）：未认证返回 AUTH_NOT_CERTIFIED。
-     * 该错误码由 M1（用户模块）在 ErrorCode 追加；为避免双会话同时写 AUTH 段冲突，
-     * 此处按名称反射对齐 M1 的枚举值，M1 尚未落地时回退 FORBIDDEN。
-     */
-    private void requireCertified(Long userId) {
-        Integer authStatus = goodsMapper.selectUserAuthStatus(userId);
-        if (authStatus == null || authStatus != 1) {
-            throw new BusinessException(resolveAuthNotCertified(), "请先完成校园认证");
-        }
-    }
-
-    private static ErrorCode resolveAuthNotCertified() {
-        try {
-            return ErrorCode.valueOf("AUTH_NOT_CERTIFIED");
-        } catch (IllegalArgumentException ex) {
-            return ErrorCode.FORBIDDEN;
         }
     }
 

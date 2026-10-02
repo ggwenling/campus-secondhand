@@ -4,6 +4,7 @@ import com.campus.market.common.LoginUserTestFactory;
 import com.campus.market.common.MpTestSupport;
 import com.campus.market.common.api.ErrorCode;
 import com.campus.market.common.exception.BusinessException;
+import com.campus.market.config.CreditProperties;
 import com.campus.market.dto.GoodsImageDTO;
 import com.campus.market.dto.GoodsPublishDTO;
 import com.campus.market.entity.Category;
@@ -21,6 +22,7 @@ import com.campus.market.mapper.GoodsTagMapper;
 import com.campus.market.mapper.TagMapper;
 import com.campus.market.mapper.UserBehaviorMapper;
 import com.campus.market.security.LoginUser;
+import com.campus.market.security.UserAccessGuard;
 import com.campus.market.service.RecommendService;
 import com.campus.market.service.SensitiveWordService;
 import org.junit.jupiter.api.BeforeAll;
@@ -29,6 +31,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
@@ -67,6 +70,8 @@ class GoodsServiceImplTest {
     @Mock FavoriteMapper favoriteMapper;
     @Mock SensitiveWordService sensitiveWordService;
     @Mock RecommendService recommendService;
+    /** 真实守卫（阈值取自 CreditProperties 默认 60），与生产口径一致 */
+    @Spy UserAccessGuard userAccessGuard = new UserAccessGuard(new CreditProperties());
 
     @InjectMocks GoodsServiceImpl service;
 
@@ -78,7 +83,6 @@ class GoodsServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        lenient().when(goodsMapper.selectUserAuthStatus(USER_ID)).thenReturn(1);
         lenient().when(sensitiveWordService.findHits(any())).thenReturn(List.of());
         lenient().when(categoryMapper.selectById(100L)).thenReturn(category());
     }
@@ -87,10 +91,25 @@ class GoodsServiceImplTest {
 
     @Test
     void publish_uncertified_rejected() {
-        when(goodsMapper.selectUserAuthStatus(USER_ID)).thenReturn(0);
-        assertThatThrownBy(() -> service.publish(dto(), user()))
+        assertThatThrownBy(() -> service.publish(dto(), LoginUserTestFactory.uncertified(USER_ID)))
                 .isInstanceOfSatisfying(BusinessException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.AUTH_NOT_CERTIFIED));
+    }
+
+    @Test
+    void publish_creditRestricted_rejected() {
+        // CRD-02：受限用户（creditScore < 60）禁止发布商品
+        assertThatThrownBy(() -> service.publish(dto(), LoginUserTestFactory.restricted(USER_ID)))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.ACCOUNT_RESTRICTED));
+    }
+
+    @Test
+    void update_creditRestricted_rejected() {
+        // CRD-02：受限校验先于存在性/归属校验，受限用户编辑同样被拦截（编辑与发布口径一致）
+        assertThatThrownBy(() -> service.update(GOODS_ID, dto(), LoginUserTestFactory.restricted(USER_ID)))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.ACCOUNT_RESTRICTED));
     }
 
     @Test

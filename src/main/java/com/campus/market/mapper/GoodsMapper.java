@@ -37,7 +37,4 @@ public interface GoodsMapper extends BaseMapper<Goods> {
      * user 实体归 M1 所有，M2 不创建 User 实体/Importer，仅以 SQL 投影读取展示字段，避免文件冲突。
      */
     SellerVO selectSellerSummary(@Param("userId") Long userId);
-
-    /** 认证状态只读投影（0=未认证 1=已认证），发布/编辑前校验（PRD GDS-01） */
-    Integer selectUserAuthStatus(@Param("userId") Long userId);
 }
