@@ -69,6 +69,12 @@
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
 
+        <!-- WebSocket 私信实时推送（PRD §6.4 聊天和通知 / M4）：消息先落库再经 WS 在线推送 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
+
         <!-- JWT 无状态登录（PRD USR-02） -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>

@@ -55,7 +55,29 @@ public enum ErrorCode {
     /** PRD §5.1：验证码发送限频（1 分钟内不可重发 / 每日 10 次） */
     AUTH_CODE_LIMIT(42901, "验证码发送过于频繁，请稍后再试"),
     /** PRD USR-03：该账号已完成校园认证，无需重复认证 */
-    AUTH_ALREADY_CERTIFIED(40905, "该账号已完成校园认证");
+    AUTH_ALREADY_CERTIFIED(40905, "该账号已完成校园认证"),
+
+    // ==================== CHAT 聊天段（M4 即时消息，追加式维护） ====================
+    /** PRD CHT-01/02：会话不存在（含未创建场景） */
+    CHAT_CONV_NOT_FOUND(40403, "会话不存在"),
+    /** PRD CHT-02：非会话双方访问会话消息 */
+    CHAT_FORBIDDEN(40306, "无权访问该会话"),
+    /** PRD CHT-02/06：消息内容/类型不合法（空、超 500 字、类型未知、给自己发消息等） */
+    CHAT_MESSAGE_INVALID(40010, "消息内容不合法"),
+
+    // ==================== ORDER/CRD 订单与信用段（M3 交易与信用，追加式维护） ====================
+    /** PRD ORD-05：订单不存在 */
+    ORDER_NOT_FOUND(40402, "订单不存在"),
+    /** PRD ORD-05/06：仅订单双方可查看或操作 */
+    ORDER_FORBIDDEN(40305, "无权访问该订单"),
+    /** PRD §5.2：订单当前状态不允许该操作（重复确认/重复取消/重复完成等） */
+    ORDER_STATE_INVALID(40906, "订单当前状态不允许该操作"),
+    /** PRD ORD-01：商品不在 ON_SALE，无法下单（含并发下单锁失败） */
+    ORDER_GOODS_NOT_AVAILABLE(40907, "商品当前不可下单"),
+    /** PRD ORD-06：每单每人只能评价一次（uk_order_reviewer 兜底） */
+    ORDER_DUPLICATE_REVIEW(40908, "该订单已评价过，请勿重复评价"),
+    /** PRD ORD-06：仅订单完成（COMPLETED）后 7 天内可评价 */
+    REVIEW_WINDOW_CLOSED(40009, "已过评价期（完成后 7 天内有效）");
 
     private final int code;
     private final String message;
