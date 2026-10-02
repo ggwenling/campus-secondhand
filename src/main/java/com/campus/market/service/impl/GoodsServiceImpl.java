@@ -467,6 +467,21 @@ public class GoodsServiceImpl implements GoodsService {
         };
     }
 
+    @Override
+    public PageResult<GoodsCardVO> pageMine(Long userId, long pageNum, long pageSize) {
+        Page<Goods> page = new Page<>(Math.max(pageNum, 1), Math.min(Math.max(pageSize, 1), 100));
+        Page<Goods> result = goodsMapper.selectPage(page, new LambdaQueryWrapper<Goods>()
+                .eq(Goods::getUserId, userId)
+                .ne(Goods::getStatus, Goods.STATUS_DELETED)
+                .orderByDesc(Goods::getUpdatedAt));
+        PageResult<GoodsCardVO> voPage = new PageResult<>();
+        voPage.setList(buildCards(result.getRecords()));
+        voPage.setTotal(result.getTotal());
+        voPage.setPageNum(result.getCurrent());
+        voPage.setPageSize(result.getSize());
+        return voPage;
+    }
+
     /** 列表/收藏页卡片装配：批量补封面与标签，避免 N+1 */
     private List<GoodsCardVO> buildCards(List<Goods> goodsList) {
         if (goodsList == null || goodsList.isEmpty()) {

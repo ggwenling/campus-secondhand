@@ -33,6 +33,9 @@ public interface GoodsService {
     /** 在售商品分页多条件查询（含 q 全文搜索与教材 courseName/isbn 检索） */
     PageResult<GoodsCardVO> pageList(GoodsListQuery query);
 
+    /** 我发布的商品（个人中心 Tab，除已删除外全部状态，PRD USR-06） */
+    PageResult<GoodsCardVO> pageMine(Long userId, long pageNum, long pageSize);
+
     /** 商品详情（含图集/标签/卖家摘要/当前用户收藏态），并写浏览埋点（登录用户口径） */
     GoodsDetailVO detail(Long id, LoginUser viewer);
 }
