@@ -4,6 +4,7 @@ import com.campus.market.common.api.ErrorCode;
 import com.campus.market.common.exception.BusinessException;
 import com.campus.market.security.annotation.RequireAuth;
 import com.campus.market.security.annotation.RequireRole;
+import com.campus.market.service.UserService;
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -33,6 +34,8 @@ public class AuthInterceptor implements HandlerInterceptor {
 
     private final JwtUtil jwtUtil;
 
+    private final UserService userService;
+
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
         if (!(handler instanceof HandlerMethod handlerMethod)) {
@@ -40,6 +43,10 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
 
         LoginUser user = resolveUser(request);
+        // 前台用户主体：刷新封禁/认证/信用状态（封禁拦截 + 到期自动解封，PRD §4.1/§5.7）
+        if (user != null && user.getUserType() == LoginUser.UserType.USER) {
+            userService.applyFreshState(user);
+        }
 
         RequireAuth requireAuth = findAnnotation(handlerMethod, RequireAuth.class);
         if (requireAuth != null) {

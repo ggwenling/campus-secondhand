@@ -19,4 +19,8 @@ public class LoginUser {
     private String adminRole;
     /** token 类型：access / refresh，refresh 不能用于访问业务接口 */
     private String tokenType;
+    /** 最新认证状态（0/1）：由 AuthInterceptor 每次请求从 DB 刷新，token 不携带（PRD §4.1） */
+    private Integer authStatus;
+    /** 最新信用分：同上，供受限策略判断（PRD §5.7） */
+    private Integer creditScore;
 }
