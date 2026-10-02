@@ -130,6 +130,10 @@ public class UploadServiceImpl implements UploadService {
         BufferedImage sourceImage;
         try (InputStream in = Files.newInputStream(source)) {
             sourceImage = ImageIO.read(in);
+        } catch (IOException e) {
+            // 解码失败（如魔数正确但内容损坏的图片）降级为原图 URL，不阻断发布流程
+            log.warn("缩略图解码失败，降级为原图 URL：{}（{}）", originalUrl, e.getMessage());
+            return originalUrl;
         }
         if (sourceImage == null) {
             return originalUrl;
