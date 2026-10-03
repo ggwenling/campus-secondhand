@@ -34,4 +34,10 @@ public class AuthProperties {
 
     /** 登录锁定时长（分钟） */
     private int loginLockMinutes = 10;
+
+    /** 同一 IP 登录接口限流阈值：窗口内超过 N 次拒绝（PRD §7/§9.2，M7 收尾补齐） */
+    private int loginIpLimit = 5;
+
+    /** 同一 IP 登录限流窗口（秒） */
+    private int loginIpWindowSeconds = 60;
 }

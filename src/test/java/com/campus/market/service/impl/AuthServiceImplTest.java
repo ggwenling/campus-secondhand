@@ -80,6 +80,8 @@ class AuthServiceImplTest {
     void setUp() {
         lenient().when(authProperties.getLoginFailLimit()).thenReturn(5);
         lenient().when(authProperties.getLoginLockMinutes()).thenReturn(10);
+        lenient().when(authProperties.getLoginIpLimit()).thenReturn(5);
+        lenient().when(authProperties.getLoginIpWindowSeconds()).thenReturn(60);
         lenient().when(authProperties.getEmailWhitelist()).thenReturn(List.of("@stu.example.edu.cn"));
         lenient().when(authProperties.getCodeTtlMinutes()).thenReturn(10);
         lenient().when(authProperties.getCodeSendIntervalSeconds()).thenReturn(60);
@@ -115,9 +117,34 @@ class AuthServiceImplTest {
     void login_failCountReached_locked() {
         when(redisService.get(KEY_LOGIN_FAIL + "neo")).thenReturn("5");
 
-        assertThatThrownBy(() -> service.login(login("neo", "bad")))
+        assertThatThrownBy(() -> service.login(login("neo", "bad"), "127.0.0.1"))
                 .isInstanceOfSatisfying(BusinessException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.AUTH_LOGIN_LOCKED));
+    }
+
+    @Test
+    void login_ipOverLimit_rejectedWithTooManyRequests() {
+        // 同 IP 窗口内第 6 次（阈值 5）→ 42900，且不再进入用户名锁定/凭据校验（PRD §7/§9.2）
+        when(redisService.increment("campus:market:auth:loginip:10.1.1.9")).thenReturn(6L);
+
+        assertThatThrownBy(() -> service.login(login("neo", "bad"), "10.1.1.9"))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.TOO_MANY_REQUESTS));
+        verify(userMapper, never()).selectByUsername(anyString());
+    }
+
+    @Test
+    void login_ipFirstHit_setsWindowTtl() {
+        when(redisService.increment("campus:market:auth:loginip:10.1.1.9")).thenReturn(1L);
+        when(userMapper.selectByUsername("neo")).thenReturn(null);
+        when(passwordEncoder.matches(any(), anyString())).thenReturn(false);
+
+        assertThatThrownBy(() -> service.login(login("neo", "bad"), "10.1.1.9"))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.AUTH_CREDENTIALS_INVALID));
+
+        verify(redisService).set(eq("campus:market:auth:loginip:10.1.1.9"), eq("1"),
+                eq(Duration.ofSeconds(60)));
     }
 
     @Test
@@ -127,7 +154,7 @@ class AuthServiceImplTest {
         when(passwordEncoder.matches(any(), anyString())).thenReturn(false);
         when(redisService.increment(KEY_LOGIN_FAIL + "neo")).thenReturn(1L);
 
-        assertThatThrownBy(() -> service.login(login("neo", "bad")))
+        assertThatThrownBy(() -> service.login(login("neo", "bad"), "127.0.0.1"))
                 .isInstanceOfSatisfying(BusinessException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.AUTH_CREDENTIALS_INVALID));
 
@@ -141,7 +168,7 @@ class AuthServiceImplTest {
         when(userMapper.selectByUsername("neo")).thenReturn(user);
         when(passwordEncoder.matches("Passw0rd!", "$2a$hash")).thenReturn(true);
 
-        LoginVO vo = service.login(login("neo", "Passw0rd!"));
+        LoginVO vo = service.login(login("neo", "Passw0rd!"), "127.0.0.1");
 
         verify(redisService).delete(KEY_LOGIN_FAIL + "neo");
         verify(userMapper).updateById(any(User.class));

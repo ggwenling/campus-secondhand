@@ -41,6 +41,7 @@ import java.util.Locale;
 public class AuthServiceImpl implements AuthService {
 
     private static final String KEY_LOGIN_FAIL = "campus:market:auth:loginfail:";
+    private static final String KEY_LOGIN_IP = "campus:market:auth:loginip:";
     private static final String KEY_CODE = "campus:market:auth:code:";
     private static final String KEY_CODE_LOCK = "campus:market:auth:codelock:";
     private static final String KEY_CODE_DAILY = "campus:market:auth:codedaily:";
@@ -75,7 +76,18 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public LoginVO login(LoginDTO dto) {
+    public LoginVO login(LoginDTO dto, String clientIp) {
+        // 同 IP 限流（PRD §7/§9.2：5 次/分钟/IP）：无论成败均计数，防撞库与暴力枚举
+        String ipKey = KEY_LOGIN_IP + (clientIp == null || clientIp.isBlank() ? "unknown" : clientIp);
+        long ipHits = redisService.increment(ipKey);
+        if (ipHits == 1) {
+            redisService.set(ipKey, "1", Duration.ofSeconds(authProperties.getLoginIpWindowSeconds()));
+        }
+        if (ipHits > authProperties.getLoginIpLimit()) {
+            log.warn("登录 IP 限流触发：ip={} 窗口内第 {} 次", clientIp, ipHits);
+            throw new BusinessException(ErrorCode.TOO_MANY_REQUESTS);
+        }
+
         String failKey = KEY_LOGIN_FAIL + dto.getUsername();
         String fails = redisService.get(failKey);
         if (fails != null && Integer.parseInt(fails) >= authProperties.getLoginFailLimit()) {

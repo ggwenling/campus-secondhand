@@ -15,8 +15,8 @@ public interface AuthService {
     /** 注册并自动登录（PRD USR-01） */
     LoginVO register(RegisterDTO dto);
 
-    /** 登录：失败 5 次锁 10 分钟（PRD USR-02）；封禁用户可登录但后续接口全部拦截 */
-    LoginVO login(LoginDTO dto);
+    /** 登录：失败 5 次锁 10 分钟（PRD USR-02）+ 同 IP 限流（PRD §7）；封禁用户可登录但后续接口全部拦截 */
+    LoginVO login(LoginDTO dto, String clientIp);
 
     /** 用 refreshToken 换发新双 token（PRD USR-02） */
     LoginVO refresh(RefreshDTO dto);

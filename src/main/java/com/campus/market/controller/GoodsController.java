@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -80,6 +81,14 @@ public class GoodsController {
     @GetMapping
     public Result<PageResult<GoodsCardVO>> list(GoodsListQuery query) {
         return Result.ok(goodsService.pageList(query));
+    }
+
+    @Operation(summary = "我的商品分页（个人中心 Tab，仅登录本人）")
+    @GetMapping("/my")
+    public Result<PageResult<GoodsCardVO>> my(@RequestParam(defaultValue = "1") long pageNum,
+                                              @RequestParam(defaultValue = "10") long pageSize) {
+        LoginUser user = requireFrontUser();
+        return Result.ok(goodsService.pageMine(user.getUserId(), pageNum, pageSize));
     }
 
     @Operation(summary = "商品详情（公开；登录用户写浏览埋点，同日去重）")

@@ -1,6 +1,7 @@
 package com.campus.market.controller;
 
 import com.campus.market.common.api.Result;
+import com.campus.market.common.util.IpUtils;
 import com.campus.market.dto.LoginDTO;
 import com.campus.market.dto.RefreshDTO;
 import com.campus.market.dto.RegisterDTO;
@@ -13,6 +14,7 @@ import com.campus.market.service.AuthService;
 import com.campus.market.vo.LoginVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -37,10 +39,10 @@ public class AuthController {
         return Result.ok(authService.register(dto));
     }
 
-    @Operation(summary = "登录（失败 5 次锁 10 分钟，PRD USR-02）")
+    @Operation(summary = "登录（失败 5 次锁 10 分钟 + 同 IP 限流 5 次/分钟，PRD USR-02/§7）")
     @PostMapping("/login")
-    public Result<LoginVO> login(@Valid @RequestBody LoginDTO dto) {
-        return Result.ok(authService.login(dto));
+    public Result<LoginVO> login(@Valid @RequestBody LoginDTO dto, HttpServletRequest request) {
+        return Result.ok(authService.login(dto, IpUtils.clientIp(request)));
     }
 
     @Operation(summary = "刷新令牌（refreshToken 换新双 token）")
