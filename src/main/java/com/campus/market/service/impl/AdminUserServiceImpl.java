@@ -17,6 +17,7 @@ import com.campus.market.security.LoginUser;
 import com.campus.market.service.AdminUserService;
 import com.campus.market.service.CreditService;
 import com.campus.market.service.OperationLogService;
+import com.campus.market.vo.AdminUserVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -45,7 +46,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     private final OperationLogService operationLogService;
 
     @Override
-    public PageResult<User> page(String username, long pageNum, long pageSize) {
+    public PageResult<AdminUserVO> page(String username, long pageNum, long pageSize) {
         pageSize = Math.min(Math.max(pageSize, 1), 100);
         pageNum = Math.max(pageNum, 1);
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<User>()
@@ -53,8 +54,8 @@ public class AdminUserServiceImpl implements AdminUserService {
                 .orderByDesc(User::getCreatedAt)
                 .orderByDesc(User::getId);
         IPage<User> result = userMapper.selectPage(new Page<>(pageNum, pageSize), wrapper);
-        List<User> records = result.getRecords();
-        PageResult<User> page = new PageResult<>();
+        List<AdminUserVO> records = result.getRecords().stream().map(AdminUserServiceImpl::toVO).toList();
+        PageResult<AdminUserVO> page = new PageResult<>();
         page.setList(records);
         page.setTotal(result.getTotal());
         page.setPageNum(result.getCurrent());
@@ -63,12 +64,31 @@ public class AdminUserServiceImpl implements AdminUserService {
     }
 
     @Override
-    public User detail(Long userId) {
+    public AdminUserVO detail(Long userId) {
         User user = userMapper.selectById(userId);
         if (user == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "用户不存在");
         }
-        return user;
+        return toVO(user);
+    }
+
+    /** 实体 → 管理端 VO：不拷贝 password（BCrypt 哈希不随 JSON 输出，验收 P1） */
+    private static AdminUserVO toVO(User user) {
+        AdminUserVO vo = new AdminUserVO();
+        vo.setId(user.getId());
+        vo.setUsername(user.getUsername());
+        vo.setNickname(user.getNickname());
+        vo.setAvatar(user.getAvatar());
+        vo.setCollege(user.getCollege());
+        vo.setBio(user.getBio());
+        vo.setCreditScore(user.getCreditScore());
+        vo.setAuthStatus(user.getAuthStatus());
+        vo.setStatus(user.getStatus());
+        vo.setBanReason(user.getBanReason());
+        vo.setBannedUntil(user.getBannedUntil());
+        vo.setLastLoginAt(user.getLastLoginAt());
+        vo.setCreatedAt(user.getCreatedAt());
+        return vo;
     }
 
     @Override

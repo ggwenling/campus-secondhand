@@ -5,6 +5,7 @@ import com.campus.market.common.api.PageResult;
 import com.campus.market.common.api.Result;
 import com.campus.market.common.exception.BusinessException;
 import com.campus.market.entity.User;
+import com.campus.market.vo.AdminUserVO;
 import com.campus.market.security.LoginUser;
 import com.campus.market.security.UserContext;
 import com.campus.market.security.annotation.OperationLog;
@@ -26,22 +27,24 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 用户管理（PRD ADM-05，SUPER+OPERATOR）：分页/详情/封禁/解封/信用调整。
+ * 用户管理（PRD ADM-05 / §4.2 矩阵：用户管理=SUPER+AUDITOR，信用分调整=SUPER 专属）：
+ * 分页/详情/封禁/解封/信用调整。
  * 审计由方法内显式记录（含理由摘要，比 AOP 参数捕获更精确）。
+ * 返回 AdminUserVO，不暴露 password 哈希（验收 P1）。
  */
-@Tag(name = "管理后台-用户管理（SUPER/OPERATOR）")
+@Tag(name = "管理后台-用户管理（SUPER/AUDITOR）")
 @Validated
 @RestController
 @RequestMapping("/api/admin/users")
 @RequiredArgsConstructor
-@RequireRole({"super", "operator"})
+@RequireRole({"super", "auditor"})
 public class AdminUserController {
 
     private final AdminUserService adminUserService;
 
     @Operation(summary = "用户分页（username 模糊可选）")
     @GetMapping
-    public Result<PageResult<User>> page(
+    public Result<PageResult<AdminUserVO>> page(
             @RequestParam(required = false) String username,
             @RequestParam(defaultValue = "1") @Min(1) long pageNum,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) long pageSize) {
@@ -50,7 +53,7 @@ public class AdminUserController {
 
     @Operation(summary = "用户详情")
     @GetMapping("/{id}")
-    public Result<User> detail(@PathVariable Long id) {
+    public Result<AdminUserVO> detail(@PathVariable Long id) {
         return Result.ok(adminUserService.detail(id));
     }
 
@@ -68,7 +71,8 @@ public class AdminUserController {
         return Result.ok();
     }
 
-    @Operation(summary = "手动调整信用分（ADMIN_ADJUST，change 正加负减，remark 必填）")
+    @Operation(summary = "手动调整信用分（ADMIN_ADJUST，change 正加负减，remark 必填；仅 SUPER，PRD §4.2）")
+    @RequireRole("super")
     @PostMapping("/{id}/credit")
     public Result<Void> adjustCredit(@PathVariable Long id, @RequestBody CreditBody body) {
         adminUserService.adjustCredit(id, body.getChange(), body.getRemark(), requireAdmin());

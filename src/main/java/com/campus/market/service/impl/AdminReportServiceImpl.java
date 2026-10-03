@@ -146,6 +146,10 @@ public class AdminReportServiceImpl implements AdminReportService {
     /** 目标归属用户（软删目标仍可回溯归属）；目标不存在抛 40410 */
     private Long resolveTargetOwner(Report report) {
         String type = report.getTargetType();
+        // 举报"用户"：被举报用户即处置对象（验收 P1：缺此分支导致 USER 工单永远 40410）
+        if (AdminContentVO.TYPE_USER.equals(type)) {
+            return report.getTargetId();
+        }
         if (AdminContentVO.TYPE_GOODS.equals(type)) {
             Goods goods = goodsMapper.selectById(report.getTargetId());
             if (goods == null) {

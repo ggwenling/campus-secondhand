@@ -16,6 +16,8 @@ public class AdminContentVO {
     public static final String TYPE_GOODS = "GOODS";
     public static final String TYPE_WANT = "WANT";
     public static final String TYPE_SWAP = "SWAP";
+    /** 举报目标类型"用户"（PRD §3.21 report.target_type 第四类，仅用于举报处置链路） */
+    public static final String TYPE_USER = "USER";
 
     /** GOODS / WANT / SWAP */
     private String targetType;
