@@ -5,6 +5,7 @@ import com.campus.market.entity.Banner;
 import com.campus.market.entity.Notice;
 import com.campus.market.security.LoginUser;
 import com.campus.market.security.UserContext;
+import com.campus.market.security.annotation.OperationLog;
 import com.campus.market.security.annotation.RequireRole;
 import com.campus.market.service.AdminOpsService;
 import com.campus.market.vo.DashboardVO;
@@ -47,6 +48,7 @@ public class AdminOpsController {
 
     @Operation(summary = "新建轮播（默认下线态）")
     @RequireRole({"super", "operator"})
+    @OperationLog(action = "BANNER_CREATE", targetType = "BANNER")
     @PostMapping("/banners")
     public Result<Long> createBanner(@RequestBody BannerBody body) {
         return Result.ok(adminOpsService.createBanner(body.getTitle(), body.getImageUrl(),
@@ -55,6 +57,7 @@ public class AdminOpsController {
 
     @Operation(summary = "编辑轮播（含上下线切换）")
     @RequireRole({"super", "operator"})
+    @OperationLog(action = "BANNER_UPDATE", targetType = "BANNER")
     @PutMapping("/banners/{id}")
     public Result<Void> updateBanner(@PathVariable Long id, @RequestBody BannerBody body) {
         adminOpsService.updateBanner(id, body.getTitle(), body.getImageUrl(),
@@ -64,6 +67,7 @@ public class AdminOpsController {
 
     @Operation(summary = "删除轮播")
     @RequireRole({"super", "operator"})
+    @OperationLog(action = "BANNER_DELETE", targetType = "BANNER")
     @DeleteMapping("/banners/{id}")
     public Result<Void> deleteBanner(@PathVariable Long id) {
         adminOpsService.deleteBanner(id);
@@ -81,6 +85,7 @@ public class AdminOpsController {
 
     @Operation(summary = "新建公告（草稿态）")
     @RequireRole({"super", "operator"})
+    @OperationLog(action = "NOTICE_CREATE", targetType = "NOTICE")
     @PostMapping("/notices")
     public Result<Long> createNotice(@RequestBody NoticeBody body) {
         return Result.ok(adminOpsService.createNotice(body.getTitle(), body.getContent(),
@@ -89,6 +94,7 @@ public class AdminOpsController {
 
     @Operation(summary = "编辑公告（标题/内容）")
     @RequireRole({"super", "operator"})
+    @OperationLog(action = "NOTICE_UPDATE", targetType = "NOTICE")
     @PutMapping("/notices/{id}")
     public Result<Void> updateNotice(@PathVariable Long id, @RequestBody NoticeBody body) {
         adminOpsService.updateNotice(id, body.getTitle(), body.getContent());
@@ -97,6 +103,7 @@ public class AdminOpsController {
 
     @Operation(summary = "发布（草稿→发布）")
     @RequireRole({"super", "operator"})
+    @OperationLog(action = "NOTICE_PUBLISH", targetType = "NOTICE")
     @PostMapping("/notices/{id}/publish")
     public Result<Void> publishNotice(@PathVariable Long id) {
         adminOpsService.publishNotice(id, requireAdmin());
@@ -105,6 +112,7 @@ public class AdminOpsController {
 
     @Operation(summary = "下线（发布→下线）")
     @RequireRole({"super", "operator"})
+    @OperationLog(action = "NOTICE_OFFLINE", targetType = "NOTICE")
     @PostMapping("/notices/{id}/offline")
     public Result<Void> offlineNotice(@PathVariable Long id) {
         adminOpsService.offlineNotice(id, requireAdmin());
@@ -113,6 +121,7 @@ public class AdminOpsController {
 
     @Operation(summary = "删除公告")
     @RequireRole({"super", "operator"})
+    @OperationLog(action = "NOTICE_DELETE", targetType = "NOTICE")
     @DeleteMapping("/notices/{id}")
     public Result<Void> deleteNotice(@PathVariable Long id) {
         adminOpsService.deleteNotice(id);

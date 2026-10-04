@@ -38,9 +38,14 @@ public class RedisService {
         return Boolean.TRUE.equals(stringRedisTemplate.hasKey(key));
     }
 
-    /** 自增并返回新值（限流计数用），需要调用方自行设置过期时间 */
+    /** 自增并返回新值（限流计数用） */
     public long increment(String key) {
         Long value = stringRedisTemplate.opsForValue().increment(key);
         return value == null ? 0L : value;
+    }
+
+    /** 为已有 key 设置过期时间（限流计数：increment 后仅首次设置，避免 SET 覆盖造成的并发少计，验收 P2②） */
+    public boolean expire(String key, Duration ttl) {
+        return Boolean.TRUE.equals(stringRedisTemplate.expire(key, ttl));
     }
 }

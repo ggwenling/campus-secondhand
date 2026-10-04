@@ -158,12 +158,17 @@ public class ReportServiceImpl implements ReportService {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "处置结果仅允许 1(已处置)或 2(已驳回)");
         }
         requireById(reportId);
-        reportMapper.update(null, new LambdaUpdateWrapper<Report>()
+        // 仅待处理工单可被处置：并发下二次处置 rows=0（验收 P2④）
+        int rows = reportMapper.update(null, new LambdaUpdateWrapper<Report>()
                 .eq(Report::getId, reportId)
+                .eq(Report::getStatus, Report.STATUS_PENDING)
                 .set(Report::getStatus, status)
                 .set(Report::getResult, normalizeText(result))
                 .set(Report::getHandlerId, handlerId)
                 .set(Report::getHandledAt, LocalDateTime.now(BUSINESS_ZONE)));
+        if (rows == 0) {
+            throw new BusinessException(ErrorCode.REPORT_ALREADY_HANDLED);
+        }
     }
 
     // ==================== 私有辅助 ====================

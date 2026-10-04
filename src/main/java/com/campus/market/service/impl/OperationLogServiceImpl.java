@@ -29,6 +29,8 @@ public class OperationLogServiceImpl implements OperationLogService {
     public void record(Long adminId, String adminUsername, String action, String targetType,
                        Long targetId, String detail, String ip) {
         try {
+            // 调用方未传 IP 时自动从当前请求补齐（验收 P3：审计 IP 多为 null）
+            String resolvedIp = StringUtils.hasText(ip) ? ip : currentRequestIp();
             OperationLog log2 = new OperationLog();
             log2.setAdminId(adminId);
             log2.setAdminUsername(adminUsername);
@@ -36,11 +38,19 @@ public class OperationLogServiceImpl implements OperationLogService {
             log2.setTargetType(targetType);
             log2.setTargetId(targetId);
             log2.setDetail(truncate(detail));
-            log2.setIp(ip == null || ip.isBlank() ? "unknown" : ip);
+            log2.setIp(StringUtils.hasText(resolvedIp) ? resolvedIp : "unknown");
             operationLogMapper.insert(log2);
         } catch (Exception e) {
             log.warn("操作日志写入失败（不阻断业务）：adminId={}, action={}, err={}", adminId, action, e.getMessage());
         }
+    }
+
+    /** 从当前请求线程取客户端 IP；无请求上下文（定时任务等）返回 null */
+    private String currentRequestIp() {
+        var attrs = org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
+        return attrs instanceof org.springframework.web.context.request.ServletRequestAttributes sra
+                ? com.campus.market.common.util.IpUtils.clientIp(sra.getRequest())
+                : null;
     }
 
     @Override

@@ -4,6 +4,7 @@ import com.campus.market.common.api.Result;
 import com.campus.market.entity.Category;
 import com.campus.market.entity.SensitiveWord;
 import com.campus.market.security.annotation.OperationLog;
+import com.campus.market.security.annotation.OperationLog;
 import com.campus.market.security.annotation.RequireRole;
 import com.campus.market.service.AdminCatalogService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -48,6 +49,7 @@ public class AdminCatalogController {
 
     @Operation(summary = "新建分类（parentId 空或 0 为一级；仅两级）")
     @RequireRole({"super", "operator"})
+    @OperationLog(action = "CATEGORY_CREATE", targetType = "CATEGORY")
     @PostMapping("/categories")
     public Result<Long> createCategory(@RequestBody CategoryBody body) {
         return Result.ok(adminCatalogService.createCategory(body.getParentId(), body.getName(),
@@ -56,6 +58,7 @@ public class AdminCatalogController {
 
     @Operation(summary = "编辑分类（名称/图标/排序/启停）")
     @RequireRole({"super", "operator"})
+    @OperationLog(action = "CATEGORY_UPDATE", targetType = "CATEGORY")
     @PutMapping("/categories/{id}")
     public Result<Void> updateCategory(@PathVariable Long id, @RequestBody CategoryBody body) {
         adminCatalogService.updateCategory(id, body.getName(), body.getIcon(), body.getSort(), body.getStatus());
@@ -64,6 +67,7 @@ public class AdminCatalogController {
 
     @Operation(summary = "删除分类（有子分类或商品引用时拒绝）")
     @RequireRole({"super", "operator"})
+    @OperationLog(action = "CATEGORY_DELETE", targetType = "CATEGORY")
     @DeleteMapping("/categories/{id}")
     public Result<Void> deleteCategory(@PathVariable Long id) {
         adminCatalogService.deleteCategory(id);
@@ -81,6 +85,7 @@ public class AdminCatalogController {
 
     @Operation(summary = "新建标签")
     @RequireRole({"super", "operator"})
+    @OperationLog(action = "TAG_CREATE", targetType = "TAG")
     @PostMapping("/tags")
     public Result<Long> createTag(@RequestBody TagBody body) {
         return Result.ok(adminCatalogService.createTag(body.getName(), body.getSort()).getId());
@@ -88,6 +93,7 @@ public class AdminCatalogController {
 
     @Operation(summary = "编辑标签（名称/排序/启停）")
     @RequireRole({"super", "operator"})
+    @OperationLog(action = "TAG_UPDATE", targetType = "TAG")
     @PutMapping("/tags/{id}")
     public Result<Void> updateTag(@PathVariable Long id, @RequestBody TagBody body) {
         adminCatalogService.updateTag(id, body.getName(), body.getSort(), body.getStatus());
@@ -96,6 +102,7 @@ public class AdminCatalogController {
 
     @Operation(summary = "删除标签（被商品引用时拒绝）")
     @RequireRole({"super", "operator"})
+    @OperationLog(action = "TAG_DELETE", targetType = "TAG")
     @DeleteMapping("/tags/{id}")
     public Result<Void> deleteTag(@PathVariable Long id) {
         adminCatalogService.deleteTag(id);
@@ -113,6 +120,7 @@ public class AdminCatalogController {
 
     @Operation(summary = "新增敏感词（重复 40920，落库即刷新 DFA）")
     @RequireRole({"super", "auditor"})
+    @OperationLog(action = "WORD_ADD", targetType = "WORD")
     @PostMapping("/sensitive-words")
     public Result<Long> addWord(@RequestBody WordBody body) {
         return Result.ok(adminCatalogService.addWord(body.getWord()));
@@ -120,6 +128,7 @@ public class AdminCatalogController {
 
     @Operation(summary = "删除敏感词（落库即刷新 DFA）")
     @RequireRole({"super", "auditor"})
+    @OperationLog(action = "WORD_DELETE", targetType = "WORD")
     @DeleteMapping("/sensitive-words/{id}")
     public Result<Void> deleteWord(@PathVariable Long id) {
         adminCatalogService.deleteWord(id);
@@ -128,6 +137,7 @@ public class AdminCatalogController {
 
     @Operation(summary = "批量导入敏感词（自动去重，返回新增数）")
     @RequireRole({"super", "auditor"})
+    @OperationLog(action = "WORD_IMPORT", targetType = "WORD")
     @PostMapping("/sensitive-words/import")
     public Result<Integer> importWords(@RequestBody ImportBody body) {
         return Result.ok(adminCatalogService.importWords(body.getWords()));

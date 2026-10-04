@@ -8,6 +8,7 @@ import com.campus.market.common.api.ErrorCode;
 import com.campus.market.common.api.PageResult;
 import com.campus.market.common.exception.BusinessException;
 import com.campus.market.entity.Goods;
+import com.campus.market.entity.Notification;
 import com.campus.market.entity.OperationLog;
 import com.campus.market.entity.SwapPost;
 import com.campus.market.entity.WantPost;
@@ -16,6 +17,7 @@ import com.campus.market.mapper.SwapPostMapper;
 import com.campus.market.mapper.WantPostMapper;
 import com.campus.market.security.LoginUser;
 import com.campus.market.service.AdminContentService;
+import com.campus.market.service.NotificationService;
 import com.campus.market.service.OperationLogService;
 import com.campus.market.vo.AdminContentVO;
 import lombok.RequiredArgsConstructor;
@@ -48,6 +50,7 @@ public class AdminContentServiceImpl implements AdminContentService {
     private final WantPostMapper wantPostMapper;
     private final SwapPostMapper swapPostMapper;
     private final OperationLogService operationLogService;
+    private final NotificationService notificationService;
 
     @Override
     public PageResult<AdminContentVO> page(String targetType, String status, String keyword,
@@ -91,6 +94,8 @@ public class AdminContentServiceImpl implements AdminContentService {
         if (rows == 0) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "内容当前状态不可下架（可能已下架/成交/删除）");
         }
+        notifyOwner(targetType, id, String.format(
+                "您发布的%s（#%d）因违规被平台下架：%s。如有疑问请联系管理员。", targetLabel(targetType), id, trimmed));
         operationLogService.record(operator.getUserId(), operator.getUsername(),
                 OperationLog.ACTION_GOODS_TAKE_DOWN, targetType, id, "平台下架：" + trimmed, null);
         log.info("管理下架内容：type={}, id={}, by={}", targetType, id, operator.getUsername());
@@ -104,6 +109,9 @@ public class AdminContentServiceImpl implements AdminContentService {
             case AdminContentVO.TYPE_GOODS -> goodsMapper.update(null, new LambdaUpdateWrapper<Goods>()
                     .eq(Goods::getId, id)
                     .eq(Goods::getStatus, Goods.STATUS_OFF_SALE)
+                    // 仅管理员下架（off_sale_reason 非空）的可由管理员恢复；
+                    // 卖家自下架的走卖家本人 on-sale（验收 P2⑤：防误恢复卖家自下架内容）
+                    .isNotNull(Goods::getOffSaleReason)
                     .set(Goods::getStatus, Goods.STATUS_ON_SALE)
                     .set(Goods::getOffSaleReason, null));
             case AdminContentVO.TYPE_WANT -> wantPostMapper.update(null, new LambdaUpdateWrapper<WantPost>()
@@ -116,8 +124,11 @@ public class AdminContentServiceImpl implements AdminContentService {
                     .set(SwapPost::getStatus, SwapPost.STATUS_OPEN));
         };
         if (rows == 0) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "内容当前状态不可恢复（需为已下架/已关闭）");
+            throw new BusinessException(ErrorCode.PARAM_ERROR,
+                    "内容当前状态不可恢复（需为平台下架/平台关闭；卖家自下架的请由卖家自行重新上架）");
         }
+        notifyOwner(targetType, id, String.format(
+                "您发布的%s（#%d）已被管理员恢复展示。", targetLabel(targetType), id));
         operationLogService.record(operator.getUserId(), operator.getUsername(),
                 OperationLog.ACTION_GOODS_RESTORE, targetType, id, "恢复内容展示", null);
     }
@@ -170,9 +181,42 @@ public class AdminContentServiceImpl implements AdminContentService {
                 throw new BusinessException(ErrorCode.SWAP_POST_NOT_FOUND);
             }
         }
+        notifyOwner(targetType, id, String.format(
+                "您发布的%s（#%d）因违规被平台删除：%s。", targetLabel(targetType), id, trimmed));
         operationLogService.record(operator.getUserId(), operator.getUsername(),
                 OperationLog.ACTION_GOODS_DELETE, targetType, id, "软删内容：" + trimmed, null);
         log.info("管理软删内容：type={}, id={}, by={}", targetType, id, operator.getUsername());
+    }
+
+    /** 处置结果通知发布者（验收 P1：下架/删除/恢复均需通知，PRD ADM-02） */
+    private void notifyOwner(String targetType, Long id, String content) {
+        Long ownerId = switch (targetType) {
+            case AdminContentVO.TYPE_GOODS -> {
+                Goods goods = goodsMapper.selectById(id);
+                yield goods == null ? null : goods.getUserId();
+            }
+            case AdminContentVO.TYPE_WANT -> {
+                WantPost post = wantPostMapper.selectById(id);
+                yield post == null ? null : post.getUserId();
+            }
+            default -> {
+                SwapPost post = swapPostMapper.selectById(id);
+                yield post == null ? null : post.getUserId();
+            }
+        };
+        if (ownerId != null) {
+            notificationService.push(ownerId, Notification.TYPE_AUDIT,
+                    "内容处置通知", content, targetType, id);
+        }
+    }
+
+    /** 目标类型的展示名（通知文案用） */
+    private String targetLabel(String targetType) {
+        return switch (targetType) {
+            case AdminContentVO.TYPE_GOODS -> "商品";
+            case AdminContentVO.TYPE_WANT -> "求购帖";
+            default -> "交换帖";
+        };
     }
 
     // ==================== 分页投影 ====================

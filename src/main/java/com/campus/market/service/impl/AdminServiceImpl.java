@@ -46,18 +46,39 @@ public class AdminServiceImpl implements AdminService {
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final OperationLogService operationLogService;
+    private final com.campus.market.common.util.RedisService redisService;
+    private final com.campus.market.config.AuthProperties authProperties;
 
     @Override
     @Transactional
     public AdminLoginVO login(String username, String password, String ip) {
+        // 后台登录防护（验收 P3，与前台同口径复用）：IP 5 次/分钟 + 账号失败 5 次锁 10 分钟
+        String ipKey = "campus:market:auth:adminloginip:" + (ip == null || ip.isBlank() ? "unknown" : ip);
+        long ipHits = redisService.increment(ipKey);
+        if (ipHits == 1) {
+            redisService.expire(ipKey, java.time.Duration.ofMinutes(1));
+        }
+        if (ipHits > authProperties.getLoginIpLimit()) {
+            throw new BusinessException(ErrorCode.TOO_MANY_REQUESTS);
+        }
+        String failKey = "campus:market:auth:adminloginfail:" + username;
+        String fails = redisService.get(failKey);
+        if (fails != null && Integer.parseInt(fails) >= authProperties.getLoginFailLimit()) {
+            throw new BusinessException(ErrorCode.AUTH_LOGIN_LOCKED);
+        }
         Admin admin = adminMapper.selectOne(new LambdaQueryWrapper<Admin>()
                 .eq(Admin::getUsername, username));
         if (admin == null || !passwordEncoder.matches(password, admin.getPassword())) {
+            long count = redisService.increment(failKey);
+            if (count == 1) {
+                redisService.expire(failKey, java.time.Duration.ofMinutes(authProperties.getLoginLockMinutes()));
+            }
             throw new BusinessException(ErrorCode.AUTH_CREDENTIALS_INVALID);
         }
         if (admin.getStatus() != null && admin.getStatus() == Admin.STATUS_DISABLED) {
             throw new BusinessException(ErrorCode.ADMIN_DISABLED);
         }
+        redisService.delete(failKey);
 
         Admin patch = new Admin();
         patch.setId(admin.getId());

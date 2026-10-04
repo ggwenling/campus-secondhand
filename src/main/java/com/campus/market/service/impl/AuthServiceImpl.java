@@ -81,7 +81,8 @@ public class AuthServiceImpl implements AuthService {
         String ipKey = KEY_LOGIN_IP + (clientIp == null || clientIp.isBlank() ? "unknown" : clientIp);
         long ipHits = redisService.increment(ipKey);
         if (ipHits == 1) {
-            redisService.set(ipKey, "1", Duration.ofSeconds(authProperties.getLoginIpWindowSeconds()));
+            // 仅首次自增时补 TTL：increment 与 SET 覆盖写并发会互相覆盖计数（验收 P2②）
+            redisService.expire(ipKey, Duration.ofSeconds(authProperties.getLoginIpWindowSeconds()));
         }
         if (ipHits > authProperties.getLoginIpLimit()) {
             log.warn("登录 IP 限流触发：ip={} 窗口内第 {} 次", clientIp, ipHits);
@@ -96,9 +97,10 @@ public class AuthServiceImpl implements AuthService {
         User user = userMapper.selectByUsername(dto.getUsername());
         if (user == null || !passwordEncoder.matches(dto.getPassword(), user.getPassword())) {
             long count = redisService.increment(failKey);
-            // SET 覆盖同值以刷新 TTL：首失败起 10 分钟窗口（PRD USR-02）
-            redisService.set(failKey, String.valueOf(count),
-                    Duration.ofMinutes(authProperties.getLoginLockMinutes()));
+            if (count == 1) {
+                // 首失败起 10 分钟窗口（PRD USR-02）；仅首自增补 TTL，防并发覆盖少计（验收 P2②）
+                redisService.expire(failKey, Duration.ofMinutes(authProperties.getLoginLockMinutes()));
+            }
             throw new BusinessException(ErrorCode.AUTH_CREDENTIALS_INVALID);
         }
         redisService.delete(failKey);

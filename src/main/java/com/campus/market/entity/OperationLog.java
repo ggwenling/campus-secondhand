@@ -33,6 +33,20 @@ public class OperationLog {
     public static final String ACTION_WORD_DELETE = "WORD_DELETE";
     public static final String ACTION_WORD_IMPORT = "WORD_IMPORT";
     public static final String ACTION_REPORT_HANDLE = "REPORT_HANDLE";
+    public static final String ACTION_CATEGORY_CREATE = "CATEGORY_CREATE";
+    public static final String ACTION_CATEGORY_UPDATE = "CATEGORY_UPDATE";
+    public static final String ACTION_CATEGORY_DELETE = "CATEGORY_DELETE";
+    public static final String ACTION_TAG_CREATE = "TAG_CREATE";
+    public static final String ACTION_TAG_UPDATE = "TAG_UPDATE";
+    public static final String ACTION_TAG_DELETE = "TAG_DELETE";
+    public static final String ACTION_BANNER_CREATE = "BANNER_CREATE";
+    public static final String ACTION_BANNER_UPDATE = "BANNER_UPDATE";
+    public static final String ACTION_BANNER_DELETE = "BANNER_DELETE";
+    public static final String ACTION_NOTICE_CREATE = "NOTICE_CREATE";
+    public static final String ACTION_NOTICE_UPDATE = "NOTICE_UPDATE";
+    public static final String ACTION_NOTICE_PUBLISH = "NOTICE_PUBLISH";
+    public static final String ACTION_NOTICE_OFFLINE = "NOTICE_OFFLINE";
+    public static final String ACTION_NOTICE_DELETE = "NOTICE_DELETE";
 
     @TableId(type = IdType.AUTO)
     private Long id;

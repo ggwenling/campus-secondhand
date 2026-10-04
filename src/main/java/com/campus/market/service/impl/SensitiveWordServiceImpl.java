@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Locale;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -57,6 +58,8 @@ public class SensitiveWordServiceImpl implements SensitiveWordService {
         if (text == null || text.isEmpty()) {
             return List.of();
         }
+        // 匹配文本与词库同口径归一小写，防"BadWord"变体绕过 DFA（验收 P2③）
+        String normalized = text.toLowerCase(Locale.ROOT);
         Node currentRoot = root;
         if (currentRoot.children.isEmpty()) {
             return List.of();
@@ -64,15 +67,15 @@ public class SensitiveWordServiceImpl implements SensitiveWordService {
         // 逐起点沿 Trie 匹配，命中即记录（同一词去重，按出现顺序）
         Set<String> hits = new HashSet<>();
         List<String> ordered = new ArrayList<>();
-        for (int i = 0; i < text.length(); i++) {
+        for (int i = 0; i < normalized.length(); i++) {
             Node node = currentRoot;
-            for (int j = i; j < text.length(); j++) {
-                node = node.children.get(text.charAt(j));
+            for (int j = i; j < normalized.length(); j++) {
+                node = node.children.get(normalized.charAt(j));
                 if (node == null) {
                     break;
                 }
                 if (node.end) {
-                    String word = text.substring(i, j + 1);
+                    String word = normalized.substring(i, j + 1);
                     if (hits.add(word)) {
                         ordered.add(word);
                     }
