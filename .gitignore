@@ -20,3 +20,8 @@ application-local.yml
 *.iml
 .vscode/
 .DS_Store
+
+# ---- E2E 脚本残留防护（验证请求体一律写系统临时目录，不得落工程目录） ----
+/*.json
+/src/main/java/**/*.json
+ct.txt
