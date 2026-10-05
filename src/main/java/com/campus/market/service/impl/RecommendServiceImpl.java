@@ -163,8 +163,8 @@ public class RecommendServiceImpl implements RecommendService {
                 .orderByDesc(UserBehavior::getId)
                 .last("LIMIT " + BEHAVIOR_SCAN_LIMIT));
         if (behaviors.isEmpty()) {
-            // 新用户冷启动：无行为 → 热门商品（PRD §6.6）
-            return queryHotIds(size);
+            // 新用户冷启动：无行为 → 热门商品（PRD §6.6），排除自己发布的（验收 P3）
+            return queryHotIds(size, userId);
         }
 
         // 行为权重聚合（同一商品多次浏览叠加，但封顶避免刷单主导）
@@ -245,9 +245,9 @@ public class RecommendServiceImpl implements RecommendService {
         if (ranked.size() >= size) {
             return ranked;
         }
-        // 不足则用热榜补齐（排除已互动与自身发布）
+        // 不足则用热榜补齐（排除已互动与自身发布，验收 P3）
         List<Long> filled = new ArrayList<>(ranked);
-        for (Long hotId : queryHotIds(HOT_CACHE_SIZE)) {
+        for (Long hotId : queryHotIds(HOT_CACHE_SIZE, userId)) {
             if (filled.size() >= size) {
                 break;
             }
@@ -327,9 +327,15 @@ public class RecommendServiceImpl implements RecommendService {
 
     /** 热度榜查询：heat_score → view_count → want_count → id 降序（PRD §6.6 热度由浏览+想要计算） */
     private List<Long> queryHotIds(int limit) {
+        return queryHotIds(limit, null);
+    }
+
+    /** 带排除的热榜：excludeUserId 非空时排除该用户自己发布的商品（推荐语境不给用户推自己的闲置） */
+    private List<Long> queryHotIds(int limit, Long excludeUserId) {
         return goodsMapper.selectPage(new Page<>(1, normalizeLimit(limit), false),
                         new LambdaQueryWrapper<Goods>()
                                 .eq(Goods::getStatus, Goods.STATUS_ON_SALE)
+                                .ne(excludeUserId != null, Goods::getUserId, excludeUserId)
                                 .orderByDesc(Goods::getHeatScore)
                                 .orderByDesc(Goods::getViewCount)
                                 .orderByDesc(Goods::getWantCount)
@@ -376,9 +382,15 @@ public class RecommendServiceImpl implements RecommendService {
         return Math.min(Math.max(limit, 1), HOT_CACHE_SIZE);
     }
 
-    /** 读缓存：未命中返回 null（区别于空列表，"计算得出空结果"也要缓存） */
+    /** 读缓存：未命中返回 null（区别于空列表，"计算得出空结果"也要缓存）；Redis 异常降级为实时计算（验收 P1：读路径原无降级，Redis 宕机时推荐接口 500） */
     private List<Long> readIds(String key) {
-        String json = redisService.get(key);
+        String json;
+        try {
+            json = redisService.get(key);
+        } catch (Exception e) {
+            log.warn("推荐缓存读取失败，降级为实时计算：key={}, err={}", key, e.getMessage());
+            return null;
+        }
         if (json == null || json.isBlank()) {
             return null;
         }

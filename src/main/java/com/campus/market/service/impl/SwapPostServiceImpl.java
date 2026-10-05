@@ -56,8 +56,8 @@ import java.util.stream.Collectors;
 
 /**
  * 交换服务实现（PRD SWP-01~03、§5.5）。
- * 同意请求的原子性（数据库设计文档 §3.14 T8）：同一事务内 ①锁帖 ②帖置 DEALT ③本请求置已同意并回填
- * order_id ④其余待处理请求全部置已拒绝 ⑤创建 SWAP 订单（创建即 SCHEDULED，双方各自确认完成后才 COMPLETED）。
+ * 同意请求的原子性（数据库设计文档 §3.14 T8）：同一事务内 ①锁请求（固定加锁顺序：请求 → 帖）②帖置 DEALT
+ * ③本请求置已同意并回填 order_id ④其余待处理请求全部置已拒绝 ⑤创建 SWAP 订单（创建即 SCHEDULED，双方各自确认完成后才 COMPLETED）。
  */
 @Slf4j
 @Service

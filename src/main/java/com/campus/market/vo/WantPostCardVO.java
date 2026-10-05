@@ -39,7 +39,7 @@ public class WantPostCardVO {
     /** OPEN / DEALT / CLOSED */
     private String status;
 
-    /** 应约数量（含已处理，供列表展示热度） */
+    /** 待处理应约数（卡片展示口径，与交换侧 pendingRequestCount 统一，验收 P3） */
     private Long offerCount;
 
     /** 当前登录用户在该帖的应约状态：null=未应约 / 0待处理 / 1已接受 / 2已拒绝 / 3已撤回 */

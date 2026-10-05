@@ -19,6 +19,8 @@ public interface OfferMapper extends BaseMapper<Offer> {
     Offer selectByIdForUpdate(@Param("id") Long id);
 
     /** 该求购帖下除 keepId 外的待处理应约全部置为已拒绝（T8：接受时原子关帖） */
-    @Update("UPDATE offer SET status = 2 WHERE want_post_id = #{wantPostId} AND status = 0 AND id <> #{keepId}")
+    @Update("UPDATE offer SET status = " + Offer.STATUS_REJECTED
+            + " WHERE want_post_id = #{wantPostId} AND status = " + Offer.STATUS_PENDING
+            + " AND id <> #{keepId}")
     int rejectOtherPending(@Param("wantPostId") Long wantPostId, @Param("keepId") Long keepId);
 }

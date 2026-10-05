@@ -19,6 +19,8 @@ public interface SwapRequestMapper extends BaseMapper<SwapRequest> {
     SwapRequest selectByIdForUpdate(@Param("id") Long id);
 
     /** 该交换帖下除 keepId 外的待处理请求全部置为已拒绝（T8） */
-    @Update("UPDATE swap_request SET status = 2 WHERE swap_post_id = #{swapPostId} AND status = 0 AND id <> #{keepId}")
+    @Update("UPDATE swap_request SET status = " + SwapRequest.STATUS_REJECTED
+            + " WHERE swap_post_id = #{swapPostId} AND status = " + SwapRequest.STATUS_PENDING
+            + " AND id <> #{keepId}")
     int rejectOtherPending(@Param("swapPostId") Long swapPostId, @Param("keepId") Long keepId);
 }

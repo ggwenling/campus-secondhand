@@ -21,8 +21,8 @@ public interface AdminService {
     /** 修改自己的密码（原密码校验 + 强制改密标记清零 + 操作日志） */
     void changePassword(Long adminId, String oldPassword, String newPassword);
 
-    /** 管理员分页（SUPER） */
-    PageResult<AdminVO> page(Long username, long pageNum, long pageSize);
+    /** 管理员分页（SUPER；adminId 精确过滤可选） */
+    PageResult<AdminVO> page(Long adminId, long pageNum, long pageSize);
 
     /** 新建管理员（SUPER）：role 小写入参，落库转大写 */
     Long create(String username, String password, String realName, String role, LoginUser operator);

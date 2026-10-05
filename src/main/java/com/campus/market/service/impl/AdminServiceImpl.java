@@ -132,10 +132,11 @@ public class AdminServiceImpl implements AdminService {
     }
 
     @Override
-    public PageResult<AdminVO> page(Long username, long pageNum, long pageSize) {
+    public PageResult<AdminVO> page(Long adminId, long pageNum, long pageSize) {
         pageSize = Math.min(Math.max(pageSize, 1), 100);
         pageNum = Math.max(pageNum, 1);
         LambdaQueryWrapper<Admin> wrapper = new LambdaQueryWrapper<Admin>()
+                .eq(adminId != null, Admin::getId, adminId)
                 .orderByAsc(Admin::getId);
         IPage<Admin> result = adminMapper.selectPage(new Page<>(pageNum, pageSize), wrapper);
         List<AdminVO> vos = result.getRecords().stream().map(this::toVO).toList();

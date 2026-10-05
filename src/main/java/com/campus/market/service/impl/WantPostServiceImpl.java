@@ -340,7 +340,7 @@ public class WantPostServiceImpl implements WantPostService {
     @Transactional
     public OfferVO acceptOffer(Long offerId, LoginUser user) {
         userAccessGuard.requireInteractive(user);
-        // ① 锁帖（先锁帖再锁应约，固定加锁顺序避免死锁）
+        // ① 锁应约（固定加锁顺序：应约 → 帖，避免死锁）
         Offer locked = offerMapper.selectByIdForUpdate(offerId);
         if (locked == null) {
             throw new BusinessException(ErrorCode.OFFER_NOT_FOUND);
@@ -542,7 +542,7 @@ public class WantPostServiceImpl implements WantPostService {
                 .eq(Offer::getStatus, Offer.STATUS_PENDING));
     }
 
-    /** postId -> 应约总数（含已处理），批量一次查询避免 N+1 */
+    /** postId -> 待处理应约数（广场卡片"待处理口径"，与交换侧统一；批量一次查询避免 N+1） */
     private Map<Long, Long> offerCounts(List<Long> postIds) {
         List<Long> ids = postIds.stream().filter(Objects::nonNull).distinct().toList();
         if (ids.isEmpty()) {
@@ -551,6 +551,7 @@ public class WantPostServiceImpl implements WantPostService {
         List<Map<String, Object>> rows = offerMapper.selectMaps(new QueryWrapper<Offer>()
                 .select("want_post_id AS wantPostId", "COUNT(*) AS cnt")
                 .in("want_post_id", ids)
+                .eq("status", Offer.STATUS_PENDING)
                 .groupBy("want_post_id"));
         Map<Long, Long> counts = new java.util.HashMap<>();
         for (Map<String, Object> row : rows) {
