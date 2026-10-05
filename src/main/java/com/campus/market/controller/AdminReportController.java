@@ -2,11 +2,11 @@ package com.campus.market.controller;
 
 import com.campus.market.common.api.PageResult;
 import com.campus.market.common.api.Result;
-import com.campus.market.entity.Report;
 import com.campus.market.security.LoginUser;
 import com.campus.market.security.UserContext;
 import com.campus.market.security.annotation.RequireRole;
 import com.campus.market.service.AdminReportService;
+import com.campus.market.vo.ReportVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
@@ -37,18 +37,19 @@ public class AdminReportController {
 
     private final AdminReportService adminReportService;
 
-    @Operation(summary = "工单分页（status=0 待处理/1 已处置/2 已驳回；待处理优先）")
+    @Operation(summary = "工单分页（status=0 待处理/1 已处置/2 已驳回；targetType=GOODS/WANT/SWAP/USER 可选；待处理优先）")
     @GetMapping
-    public Result<PageResult<Report>> page(
+    public Result<PageResult<ReportVO>> page(
             @RequestParam(required = false) @Min(0) @Max(2) Integer status,
+            @RequestParam(required = false) String targetType,
             @RequestParam(defaultValue = "1") @Min(1) long pageNum,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) long pageSize) {
-        return Result.ok(adminReportService.page(status, pageNum, pageSize));
+        return Result.ok(adminReportService.page(status, targetType, pageNum, pageSize));
     }
 
     @Operation(summary = "工单详情")
     @GetMapping("/{id}")
-    public Result<Report> detail(@PathVariable Long id) {
+    public Result<ReportVO> detail(@PathVariable Long id) {
         return Result.ok(adminReportService.detail(id));
     }
 

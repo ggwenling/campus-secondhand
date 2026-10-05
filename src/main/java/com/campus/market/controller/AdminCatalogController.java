@@ -1,14 +1,16 @@
 package com.campus.market.controller;
 
+import com.campus.market.common.api.PageResult;
 import com.campus.market.common.api.Result;
 import com.campus.market.entity.Category;
 import com.campus.market.entity.SensitiveWord;
-import com.campus.market.security.annotation.OperationLog;
 import com.campus.market.security.annotation.OperationLog;
 import com.campus.market.security.annotation.RequireRole;
 import com.campus.market.service.AdminCatalogService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -111,11 +113,14 @@ public class AdminCatalogController {
 
     // ==================== 敏感词库（SUPER/AUDITOR） ====================
 
-    @Operation(summary = "敏感词列表（keyword 模糊可选）")
+    @Operation(summary = "敏感词列表（keyword 模糊可选，分页）")
     @RequireRole({"super", "auditor"})
     @GetMapping("/sensitive-words")
-    public Result<List<SensitiveWord>> words(@RequestParam(required = false) String keyword) {
-        return Result.ok(adminCatalogService.wordPage(keyword));
+    public Result<PageResult<SensitiveWord>> words(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "1") @Min(1) long pageNum,
+            @RequestParam(defaultValue = "50") @Min(1) @Max(200) long pageSize) {
+        return Result.ok(adminCatalogService.wordPage(keyword, pageNum, pageSize));
     }
 
     @Operation(summary = "新增敏感词（重复 40920，落库即刷新 DFA）")

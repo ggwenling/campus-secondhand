@@ -17,7 +17,9 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * 图片上传接口（PRD §9.1 / GDS-01）：登录后可上传，jpg/png/webp ≤5MB，返回 {url, thumbUrl}
+ * 图片上传接口（PRD §9.1 / GDS-01 / ADM-07）：登录后可上传（前台 USER 与后台 ADMIN 主体均放行），
+ * jpg/png/webp ≤5MB，返回 {url, thumbUrl}。
+ * 上传文件无业务归属（仅落磁盘/静态映射），不存在主键空间越权面。
  */
 @Tag(name = "商品-图片上传")
 @RestController
@@ -27,17 +29,17 @@ public class UploadController {
 
     private final UploadService uploadService;
 
-    @Operation(summary = "上传单张商品图片（multipart 字段名 file）")
+    @Operation(summary = "上传单张图片（multipart 字段名 file；前台用户与后台管理员均可）")
     @PostMapping
     public Result<UploadVO> upload(@RequestPart("file") MultipartFile file) {
-        requireFrontUser();
+        requireAuthenticated();
         return Result.ok(uploadService.saveImage(file));
     }
 
-    /** 上传仅限前台用户主体（admin 与 user 主键空间独立，防止越权） */
-    private void requireFrontUser() {
+    /** 任意已登录主体（USER/ADMIN）均可上传；未登录拒绝 */
+    private void requireAuthenticated() {
         LoginUser user = UserContext.get();
-        if (user == null || user.getUserType() != LoginUser.UserType.USER) {
+        if (user == null) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
         }
     }

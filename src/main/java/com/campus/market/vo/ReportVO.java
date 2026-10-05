@@ -18,6 +18,9 @@ public class ReportVO {
 
     private Long id;
 
+    /** 举报人 ID */
+    private Long reporterId;
+
     /** GOODS / WANT / SWAP / USER */
     private String targetType;
 

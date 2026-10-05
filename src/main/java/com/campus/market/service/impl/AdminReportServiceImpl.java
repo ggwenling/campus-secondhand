@@ -12,11 +12,13 @@ import com.campus.market.entity.Notification;
 import com.campus.market.entity.OperationLog;
 import com.campus.market.entity.Report;
 import com.campus.market.entity.SwapPost;
+import com.campus.market.entity.User;
 import com.campus.market.entity.WantPost;
 import com.campus.market.mapper.GoodsMapper;
 import com.campus.market.mapper.NotificationMapper;
 import com.campus.market.mapper.ReportMapper;
 import com.campus.market.mapper.SwapPostMapper;
+import com.campus.market.mapper.UserMapper;
 import com.campus.market.mapper.WantPostMapper;
 import com.campus.market.security.LoginUser;
 import com.campus.market.service.AdminContentService;
@@ -26,13 +28,20 @@ import com.campus.market.service.CreditService;
 import com.campus.market.service.OperationLogService;
 import com.campus.market.service.ReportService;
 import com.campus.market.vo.AdminContentVO;
+import com.campus.market.vo.ReportVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -56,6 +65,7 @@ public class AdminReportServiceImpl implements AdminReportService {
     private final GoodsMapper goodsMapper;
     private final WantPostMapper wantPostMapper;
     private final SwapPostMapper swapPostMapper;
+    private final UserMapper userMapper;
     private final NotificationMapper notificationMapper;
     private final ReportService reportService;
     private final AdminContentService adminContentService;
@@ -64,7 +74,7 @@ public class AdminReportServiceImpl implements AdminReportService {
     private final OperationLogService operationLogService;
 
     @Override
-    public PageResult<Report> page(Integer status, long pageNum, long pageSize) {
+    public PageResult<ReportVO> page(Integer status, String targetType, long pageNum, long pageSize) {
         if (status != null && status != Report.STATUS_PENDING
                 && status != Report.STATUS_HANDLED && status != Report.STATUS_REJECTED) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "status 仅支持 0/1/2");
@@ -74,11 +84,11 @@ public class AdminReportServiceImpl implements AdminReportService {
         IPage<Report> result = reportMapper.selectPage(new Page<>(pageNum, pageSize),
                 new LambdaQueryWrapper<Report>()
                         .eq(status != null, Report::getStatus, status)
+                        .eq(StringUtils.hasText(targetType), Report::getTargetType, targetType)
                         .orderByAsc(Report::getStatus)         // 待处理优先
                         .orderByDesc(Report::getCreatedAt));
-        List<Report> records = result.getRecords();
-        PageResult<Report> page = new PageResult<>();
-        page.setList(records);
+        PageResult<ReportVO> page = new PageResult<>();
+        page.setList(buildVOs(result.getRecords()));
         page.setTotal(result.getTotal());
         page.setPageNum(result.getCurrent());
         page.setPageSize(result.getSize());
@@ -86,8 +96,78 @@ public class AdminReportServiceImpl implements AdminReportService {
     }
 
     @Override
-    public Report detail(Long id) {
-        return reportService.requireById(id);
+    public ReportVO detail(Long id) {
+        return buildVOs(List.of(requireReport(id))).get(0);
+    }
+
+    /** 实体 → VO：批量补 targetTitle 标题快照（M6 收尾）与 images JSON 解析 */
+    private List<ReportVO> buildVOs(List<Report> reports) {
+        List<Long> goodsIds = new ArrayList<>();
+        List<Long> wantIds = new ArrayList<>();
+        List<Long> swapIds = new ArrayList<>();
+        List<Long> userIds = new ArrayList<>();
+        for (Report r : reports) {
+            switch (r.getTargetType()) {
+                case AdminContentVO.TYPE_GOODS -> goodsIds.add(r.getTargetId());
+                case AdminContentVO.TYPE_WANT -> wantIds.add(r.getTargetId());
+                case AdminContentVO.TYPE_SWAP -> swapIds.add(r.getTargetId());
+                case AdminContentVO.TYPE_USER -> userIds.add(r.getTargetId());
+                default -> { }
+            }
+        }
+        Map<Long, String> titles = new HashMap<>();
+        if (!goodsIds.isEmpty()) {
+            goodsMapper.selectBatchIds(goodsIds).forEach(g -> titles.put(g.getId(), g.getTitle()));
+        }
+        if (!wantIds.isEmpty()) {
+            wantPostMapper.selectBatchIds(wantIds).forEach(p -> titles.put(p.getId(), p.getTitle()));
+        }
+        if (!swapIds.isEmpty()) {
+            swapPostMapper.selectBatchIds(swapIds).forEach(p -> titles.put(p.getId(), p.getTitle()));
+        }
+        if (!userIds.isEmpty()) {
+            userMapper.selectBatchIds(userIds).forEach(u -> titles.put(u.getId(), u.getNickname()));
+        }
+        return reports.stream().map(r -> {
+            ReportVO vo = new ReportVO();
+            vo.setId(r.getId());
+            vo.setReporterId(r.getReporterId());
+            vo.setTargetType(r.getTargetType());
+            vo.setTargetId(r.getTargetId());
+            vo.setTargetTitle(titles.getOrDefault(r.getTargetId(),
+                    r.getTargetType() + " #" + r.getTargetId()));
+            vo.setReportType(r.getReportType());
+            vo.setDescription(r.getDescription());
+            vo.setImages(parseImages(r.getImages()));
+            vo.setStatus(r.getStatus());
+            vo.setStatusText(r.getStatus() == null ? null
+                    : r.getStatus() == Report.STATUS_PENDING ? "待处理"
+                    : r.getStatus() == Report.STATUS_HANDLED ? "已处置" : "已驳回");
+            vo.setResult(r.getResult());
+            vo.setHandledAt(r.getHandledAt());
+            vo.setCreatedAt(r.getCreatedAt());
+            return vo;
+        }).toList();
+    }
+
+    /** images 列为 JSON 字符串数组，解析失败回退空列表 */
+    private List<String> parseImages(String images) {
+        if (!StringUtils.hasText(images)) {
+            return List.of();
+        }
+        try {
+            return new ObjectMapper().readValue(images, new TypeReference<List<String>>() { });
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    private Report requireReport(Long id) {
+        Report report = reportMapper.selectById(id);
+        if (report == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "举报工单不存在");
+        }
+        return report;
     }
 
     @Override

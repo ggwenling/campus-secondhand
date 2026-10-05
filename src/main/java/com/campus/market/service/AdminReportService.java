@@ -1,8 +1,8 @@
 package com.campus.market.service;
 
 import com.campus.market.common.api.PageResult;
-import com.campus.market.entity.Report;
 import com.campus.market.security.LoginUser;
+import com.campus.market.vo.ReportVO;
 
 import java.util.List;
 
@@ -10,14 +10,15 @@ import java.util.List;
  * 举报工单处置服务（PRD ADM-04，SUPER+AUDITOR）：工单分页/详情/组合处置/驳回。
  * 处置原语复用 M7 前置的 {@link ReportService#markHandled}；处置动作组合委托
  * AdminContentService（下架）/ AdminUserService（封禁）/ CreditService（扣分）。
+ * 查询返回 ReportVO（含 targetTitle 标题快照，M6 收尾补齐）。
  */
 public interface AdminReportService {
 
-    /** 工单分页（status 可选 0/1/2） */
-    PageResult<Report> page(Integer status, long pageNum, long pageSize);
+    /** 工单分页（status 可选 0/1/2；targetType 可选 GOODS/WANT/SWAP/USER） */
+    PageResult<ReportVO> page(Integer status, String targetType, long pageNum, long pageSize);
 
     /** 工单详情 */
-    Report detail(Long id);
+    ReportVO detail(Long id);
 
     /**
      * 组合处置：status 0→1。actions 任选多：

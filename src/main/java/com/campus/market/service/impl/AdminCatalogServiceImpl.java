@@ -1,7 +1,9 @@
 package com.campus.market.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.campus.market.common.api.ErrorCode;
+import com.campus.market.common.api.PageResult;
 import com.campus.market.common.exception.BusinessException;
 import com.campus.market.entity.Category;
 import com.campus.market.entity.Goods;
@@ -182,10 +184,18 @@ public class AdminCatalogServiceImpl implements AdminCatalogService {
     // ==================== 敏感词库 ====================
 
     @Override
-    public List<SensitiveWord> wordPage(String keyword) {
-        return sensitiveWordMapper.selectList(new LambdaQueryWrapper<SensitiveWord>()
-                .like(StringUtils.hasText(keyword), SensitiveWord::getWord, keyword)
-                .orderByAsc(SensitiveWord::getWord));
+    public PageResult<SensitiveWord> wordPage(String keyword, long pageNum, long pageSize) {
+        Page<SensitiveWord> result = sensitiveWordMapper.selectPage(
+                new Page<>(Math.max(pageNum, 1), Math.min(Math.max(pageSize, 1), 200)),
+                new LambdaQueryWrapper<SensitiveWord>()
+                        .like(StringUtils.hasText(keyword), SensitiveWord::getWord, keyword)
+                        .orderByAsc(SensitiveWord::getWord));
+        PageResult<SensitiveWord> page = new PageResult<>();
+        page.setList(result.getRecords());
+        page.setTotal(result.getTotal());
+        page.setPageNum(result.getCurrent());
+        page.setPageSize(result.getSize());
+        return page;
     }
 
     @Override

@@ -1,5 +1,6 @@
 package com.campus.market.service;
 
+import com.campus.market.common.api.PageResult;
 import com.campus.market.entity.Category;
 import com.campus.market.entity.SensitiveWord;
 import com.campus.market.entity.Tag;
@@ -35,7 +36,7 @@ public interface AdminCatalogService {
 
     // ==================== 敏感词库（ADM-03，DFA 刷新） ====================
 
-    List<SensitiveWord> wordPage(String keyword);
+    PageResult<SensitiveWord> wordPage(String keyword, long pageNum, long pageSize);
 
     /** 新增敏感词（uk_word 重复 40920），落库后刷新 DFA */
     Long addWord(String word);

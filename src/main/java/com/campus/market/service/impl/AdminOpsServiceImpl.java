@@ -14,6 +14,7 @@ import com.campus.market.mapper.GoodsMapper;
 import com.campus.market.mapper.NoticeMapper;
 import com.campus.market.mapper.OrderInfoMapper;
 import com.campus.market.mapper.ReportMapper;
+import com.campus.market.mapper.UserBehaviorMapper;
 import com.campus.market.mapper.UserMapper;
 import com.campus.market.security.LoginUser;
 import com.campus.market.service.AdminOpsService;
@@ -51,6 +52,7 @@ public class AdminOpsServiceImpl implements AdminOpsService {
     private final GoodsMapper goodsMapper;
     private final OrderInfoMapper orderInfoMapper;
     private final ReportMapper reportMapper;
+    private final UserBehaviorMapper userBehaviorMapper;
 
     // ==================== 轮播 ====================
 
@@ -212,6 +214,12 @@ public class AdminOpsServiceImpl implements AdminOpsService {
         credit.put("受限", countCreditRange(null, 59));
         vo.setCreditDistribution(credit);
         vo.setOrdersWeekTrend(weekOrderTrend());
+
+        // M6 收尾补齐三项指标（验收遗留：认证用户数/举报处理时效/30 天活跃趋势）
+        vo.setAuthUserTotal(userMapper.selectCount(new LambdaQueryWrapper<User>()
+                .eq(User::getAuthStatus, User.AUTH_STATUS_VERIFIED)));
+        vo.setReportAvgHandleHours(avgReportHandleHours());
+        vo.setDauTrend30(dauTrend30());
         return vo;
     }
 
@@ -248,6 +256,46 @@ public class AdminOpsServiceImpl implements AdminOpsService {
             trend.add(orderInfoMapper.selectCount(new LambdaQueryWrapper<OrderInfo>()
                     .ge(OrderInfo::getCreatedAt, start)
                     .lt(OrderInfo::getCreatedAt, end)));
+        }
+        return trend;
+    }
+
+    /** 举报平均处理时长（小时）：status=已处置/已驳回 的工单，created_at → handled_at 内存聚合 */
+    private double avgReportHandleHours() {
+        List<Report> handled = reportMapper.selectList(new LambdaQueryWrapper<Report>()
+                .in(Report::getStatus, Report.STATUS_HANDLED, Report.STATUS_REJECTED)
+                .isNotNull(Report::getHandledAt)
+                .select(Report::getCreatedAt, Report::getHandledAt));
+        if (handled.isEmpty()) {
+            return 0;
+        }
+        double totalMinutes = handled.stream()
+                .mapToLong(r -> java.time.Duration.between(r.getCreatedAt(), r.getHandledAt()).toMinutes())
+                .sum();
+        return Math.round(totalMinutes / handled.size() / 6.0) / 10.0;
+    }
+
+    /** 近 30 天每日活跃用户（当日有任意行为记录的 distinct 用户数，M6 收尾） */
+    private List<DashboardVO.DauPoint> dauTrend30() {
+        LocalDate today = LocalDate.now(BUSINESS_ZONE);
+        LocalDate since = today.minusDays(29);
+        List<Map<String, Object>> rows = userBehaviorMapper.selectDauSince(since);
+        Map<LocalDate, Long> byDay = new LinkedHashMap<>();
+        for (Map<String, Object> row : rows) {
+            Object dateVal = row.get("date");
+            LocalDate day = dateVal == null ? null
+                    : (dateVal instanceof LocalDate d ? d : LocalDate.parse(String.valueOf(dateVal)));
+            Object cnt = row.get("activeUsers");
+            if (day != null) {
+                byDay.put(day, cnt == null ? 0 : ((Number) cnt).longValue());
+            }
+        }
+        List<DashboardVO.DauPoint> trend = new ArrayList<>();
+        for (LocalDate day = since; !day.isAfter(today); day = day.plusDays(1)) {
+            DashboardVO.DauPoint point = new DashboardVO.DauPoint();
+            point.setDate(day.toString());
+            point.setActiveUsers(byDay.getOrDefault(day, 0L));
+            trend.add(point);
         }
         return trend;
     }

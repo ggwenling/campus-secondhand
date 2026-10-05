@@ -4,7 +4,11 @@ import com.campus.market.common.api.ErrorCode;
 import com.campus.market.common.api.PageResult;
 import com.campus.market.common.api.Result;
 import com.campus.market.common.exception.BusinessException;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.campus.market.entity.CreditLog;
 import com.campus.market.entity.User;
+import com.campus.market.mapper.CreditLogMapper;
 import com.campus.market.vo.AdminUserVO;
 import com.campus.market.security.LoginUser;
 import com.campus.market.security.UserContext;
@@ -41,6 +45,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminUserController {
 
     private final AdminUserService adminUserService;
+    private final CreditLogMapper creditLogMapper;
 
     @Operation(summary = "用户分页（username 模糊可选）")
     @GetMapping
@@ -55,6 +60,19 @@ public class AdminUserController {
     @GetMapping("/{id}")
     public Result<AdminUserVO> detail(@PathVariable Long id) {
         return Result.ok(adminUserService.detail(id));
+    }
+
+    @Operation(summary = "用户信用分流水（时间倒序，详情抽屉用，M6 收尾）")
+    @GetMapping("/{id}/credits")
+    public Result<PageResult<CreditLog>> credits(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "1") @Min(1) long pageNum,
+            @RequestParam(defaultValue = "10") @Min(1) @Max(50) long pageSize) {
+        Page<CreditLog> page = creditLogMapper.selectPage(new Page<>(pageNum, pageSize),
+                new LambdaQueryWrapper<CreditLog>()
+                        .eq(CreditLog::getUserId, id)
+                        .orderByDesc(CreditLog::getCreatedAt));
+        return Result.ok(PageResult.of(page));
     }
 
     @Operation(summary = "封禁用户（reason 必填；durationDays 空为永久）")
